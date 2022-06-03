@@ -151,7 +151,7 @@ acceptance("User Status", function (needs) {
       exists(`.btn-emoji img.emoji[title=${userStatusEmoji}]`),
       "chosen status emoji is shown"
     );
-    await click(".btn-primary");
+    await click(".btn-primary"); // save
 
     assert.equal(
       query(".header-dropdown-toggle .user-status-background img.emoji").alt,
@@ -184,7 +184,8 @@ acceptance("User Status", function (needs) {
     await openUserStatusModal();
 
     await fillIn(".user-status-description", updatedStatus);
-    await click(".btn-primary");
+    await pickEmoji(userStatusEmoji);
+    await click(".btn-primary"); // save
 
     await click(".header-dropdown-toggle.current-user");
     await click(".menu-links-row .user-preferences-link");
@@ -193,6 +194,11 @@ acceptance("User Status", function (needs) {
         .innerText,
       updatedStatus,
       "shows user status description on the menu"
+    );
+    assert.equal(
+      query("div.quick-access-panel li.user-status img.emoji").alt,
+      `:${userStatusEmoji}:`,
+      "shows user status emoji on the menu"
     );
   });
 
@@ -205,6 +211,26 @@ acceptance("User Status", function (needs) {
     await click(".btn.delete-status");
 
     assert.notOk(exists(".header-dropdown-toggle .user-status-background"));
+  });
+
+  test("it's impossible to set status without description", async function (assert) {
+    this.siteSettings.enable_user_status = true;
+
+    await visit("/");
+    await openUserStatusModal();
+    await pickEmoji(userStatusEmoji);
+
+    assert.ok(exists(`.btn-primary[disabled]`), "the save button is disabled");
+  });
+
+  test("it's impossible to set status without emoji", async function (assert) {
+    this.siteSettings.enable_user_status = true;
+
+    await visit("/");
+    await openUserStatusModal();
+    await fillIn(".user-status-description", "some status");
+
+    assert.ok(exists(`.btn-primary[disabled]`), "the save button is disabled");
   });
 
   test("sets default status emoji automatically after user started inputting  status description", async function (assert) {
