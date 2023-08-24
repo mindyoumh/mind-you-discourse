@@ -1,8 +1,9 @@
+import I18n from "I18n";
 import {
   acceptance,
   count,
   exists,
-  queryAll,
+  query,
   visible,
 } from "discourse/tests/helpers/qunit-helpers";
 import { click, currentURL, fillIn, visit } from "@ember/test-helpers";
@@ -27,16 +28,16 @@ acceptance("Category Edit", function (needs) {
     );
 
     assert.strictEqual(
-      queryAll(".category-breadcrumb .badge-category").text(),
+      query(".category-breadcrumb .badge-category").innerText,
       "bug"
     );
     assert.strictEqual(
-      queryAll(".category-color-editor .badge-category").text(),
+      query(".category-color-editor .badge-category").innerText,
       "bug"
     );
     await fillIn("input.category-name", "testing");
     assert.strictEqual(
-      queryAll(".category-color-editor .badge-category").text(),
+      query(".category-color-editor .badge-category").innerText,
       "testing"
     );
 
@@ -76,6 +77,8 @@ acceptance("Category Edit", function (needs) {
   test("Editing required tag groups", async function (assert) {
     await visit("/c/bug/edit/tags");
 
+    assert.ok(exists(".minimum-required-tags"));
+
     assert.ok(exists(".required-tag-groups"));
     assert.strictEqual(count(".required-tag-group-row"), 0);
 
@@ -111,6 +114,7 @@ acceptance("Category Edit", function (needs) {
     await allowedTagChooser.expand();
     await allowedTagChooser.selectRowByValue("monkey");
 
+    await allowedTagChooser.collapse();
     const allowedTagGroupChooser = selectKit("#category-allowed-tag-groups");
     await allowedTagGroupChooser.expand();
     await allowedTagGroupChooser.selectRowByValue("TagGroup1");
@@ -124,6 +128,7 @@ acceptance("Category Edit", function (needs) {
     assert.deepEqual(payload.allowed_tags, ["monkey"]);
     assert.deepEqual(payload.allowed_tag_groups, ["TagGroup1"]);
 
+    await allowedTagGroupChooser.collapse();
     await allowedTagChooser.expand();
     await allowedTagChooser.deselectItemByValue("monkey");
 
@@ -156,7 +161,7 @@ acceptance("Category Edit", function (needs) {
       "/c/1-category/edit/general",
       "it goes to the general tab"
     );
-    assert.strictEqual(queryAll("input.category-name").val(), "bug");
+    assert.strictEqual(query("input.category-name").value, "bug");
   });
 
   test("Error Saving", async function (assert) {
@@ -164,14 +169,15 @@ acceptance("Category Edit", function (needs) {
     await fillIn(".email-in", "duplicate@example.com");
     await click("#save-category");
 
-    assert.ok(visible(".bootbox"));
     assert.strictEqual(
-      queryAll(".bootbox .modal-body").html(),
-      "duplicate email"
+      query(".dialog-body").textContent.trim(),
+      I18n.t("generic_error_with_reason", {
+        error: "duplicate email",
+      })
     );
 
-    await click(".bootbox .btn-primary");
-    assert.ok(!visible(".bootbox"));
+    await click(".dialog-footer .btn-primary");
+    assert.ok(!visible(".dialog-body"));
   });
 
   test("Subcategory list settings", async function (assert) {

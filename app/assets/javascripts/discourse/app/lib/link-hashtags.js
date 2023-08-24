@@ -1,20 +1,24 @@
+// TODO (martin) Delete this after core PR and any other PRs that depend
+// on this file (e.g. discourse-encrypt) are merged.
+
 import deprecated from "discourse-common/lib/deprecated";
 import { TAG_HASHTAG_POSTFIX } from "discourse/lib/tag-hashtags";
 import { ajax } from "discourse/lib/ajax";
 import { replaceSpan } from "discourse/lib/category-hashtags";
+import jQuery from "jquery";
 
 const categoryHashtags = {};
 const tagHashtags = {};
 const checkedHashtags = new Set();
 
 export function linkSeenHashtags(elem) {
-  // eslint-disable-next-line no-undef
   if (elem instanceof jQuery) {
     elem = elem[0];
 
     deprecated("linkSeenHashtags now expects a DOM node as first parameter", {
       since: "2.8.0.beta7",
       dropFrom: "2.9.0.beta1",
+      id: "discourse.link-hashtags.dom-node",
     });
   }
 

@@ -19,6 +19,7 @@ function getOpts(opts) {
       currentUser: context.currentUser,
       censoredRegexp: context.site.censored_regexp,
       customEmojiTranslation: context.site.custom_emoji_translation,
+      emojiDenyList: context.site.denied_emojis,
       siteSettings: context.siteSettings,
       formatUsername,
       watchedWordsReplace: context.site.watched_words_replace,
@@ -43,7 +44,7 @@ export function cookAsync(text, options) {
 }
 
 // Warm up pretty text with a set of options and return a function
-// which can be used to cook without rebuilding prettytext every time
+// which can be used to cook without rebuilding pretty-text every time
 export function generateCookFunction(options) {
   return loadMarkdownIt().then(() => {
     const prettyText = createPrettyText(options);
@@ -65,6 +66,12 @@ export function sanitize(text, options) {
 export function sanitizeAsync(text, options) {
   return loadMarkdownIt().then(() => {
     return createPrettyText(options).sanitize(text);
+  });
+}
+
+export function parseAsync(md, options = {}, env = {}) {
+  return loadMarkdownIt().then(() => {
+    return createPrettyText(options).opts.engine.parse(md, env);
   });
 }
 
@@ -90,6 +97,7 @@ function createPrettyText(options) {
 
 function emojiOptions() {
   let siteSettings = helperContext().siteSettings;
+  let context = helperContext();
   if (!siteSettings.enable_emoji) {
     return;
   }
@@ -99,6 +107,7 @@ function emojiOptions() {
     emojiSet: siteSettings.emoji_set,
     enableEmojiShortcuts: siteSettings.enable_emoji_shortcuts,
     inlineEmoji: siteSettings.enable_inline_emoji_translation,
+    emojiDenyList: context.site.denied_emojis,
     emojiCDNUrl: siteSettings.external_emoji_url,
   };
 }
@@ -151,7 +160,6 @@ export function excerpt(cooked, length) {
         resultLength += element.textContent.length;
       }
     } else if (element.tagName === "A") {
-      element.innerHTML = element.innerText;
       result += element.outerHTML;
       resultLength += element.innerText.length;
     } else if (element.tagName === "IMG") {

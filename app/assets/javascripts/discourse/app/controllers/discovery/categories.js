@@ -1,8 +1,9 @@
-import DiscoveryController from "discourse/controllers/discovery";
 import { inject as controller } from "@ember/controller";
+import { reads } from "@ember/object/computed";
+import DiscoveryController from "discourse/controllers/discovery";
+import { action } from "@ember/object";
 import { dasherize } from "@ember/string";
 import discourseComputed from "discourse-common/utils/decorators";
-import { reads } from "@ember/object/computed";
 
 const subcategoryStyleComponentNames = {
   rows: "categories_only",
@@ -16,13 +17,18 @@ const mobileCompatibleViews = [
   "subcategories_with_featured_topics",
 ];
 
-export default DiscoveryController.extend({
-  discovery: controller(),
+export default class CategoriesController extends DiscoveryController {
+  @controller discovery;
 
   // this makes sure the composer isn't scoping to a specific category
-  category: null,
+  category = null;
 
-  canEdit: reads("currentUser.staff"),
+  @reads("currentUser.staff") canEdit;
+
+  @discourseComputed
+  isCategoriesRoute() {
+    return this.router.currentRouteName === "discovery.categories";
+  }
 
   @discourseComputed("model.parentCategory")
   categoryPageStyle(parentCategory) {
@@ -40,22 +46,25 @@ export default DiscoveryController.extend({
     }
 
     const componentName =
-      parentCategory && style === "categories_and_latest_topics"
+      parentCategory &&
+      (style === "categories_and_latest_topics" ||
+        style === "categories_and_latest_topics_created_date")
         ? "categories_only"
         : style;
     return dasherize(componentName);
-  },
-  actions: {
-    refresh() {
-      this.send("triggerRefresh");
-    },
-    showInserted() {
-      const tracker = this.topicTrackingState;
+  }
 
-      // Move inserted into topics
-      this.model.loadBefore(tracker.get("newIncoming"), true);
-      tracker.resetTracking();
-      return false;
-    },
-  },
-});
+  @action
+  showInserted(event) {
+    event?.preventDefault();
+    const tracker = this.topicTrackingState;
+    // Move inserted into topics
+    this.model.loadBefore(tracker.get("newIncoming"), true);
+    tracker.resetTracking();
+  }
+
+  @action
+  refresh() {
+    this.send("triggerRefresh");
+  }
+}

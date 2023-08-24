@@ -35,13 +35,14 @@ export default UserChooserComponent.extend({
           } else {
             reconstructed.isUser = true;
             reconstructed.name = item.name;
+            reconstructed.showUserStatus = this.showUserStatus;
           }
         } else if (item.name) {
           reconstructed.id = item.name;
           reconstructed.name = item.full_name;
           reconstructed.isGroup = true;
         }
-        return Object.assign({}, item, reconstructed);
+        return { ...item, ...reconstructed };
       });
     });
   },

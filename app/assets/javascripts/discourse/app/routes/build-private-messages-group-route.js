@@ -21,9 +21,11 @@ export default (inboxType, filter) => {
       }
     },
 
-    model(params) {
+    model() {
       const username = this.modelFor("user").get("username_lower");
-      let topicListFilter = `topics/private-messages-group/${username}/${params.name}`;
+      const groupName = this.modelFor("userPrivateMessages.group").name;
+
+      let topicListFilter = `topics/private-messages-group/${username}/${groupName}`;
 
       if (filter !== "inbox") {
         topicListFilter = `${topicListFilter}/${filter}`;
@@ -58,9 +60,7 @@ export default (inboxType, filter) => {
         groupName = filters.pop();
       }
 
-      const group = this.modelFor("user")
-        .get("groups")
-        .filterBy("name", groupName)[0];
+      const group = this.modelFor("userPrivateMessages.group");
 
       this.setProperties({ groupName, group });
     },

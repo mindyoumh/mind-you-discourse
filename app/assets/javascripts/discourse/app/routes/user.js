@@ -1,29 +1,18 @@
 import DiscourseRoute from "discourse/routes/discourse";
-import I18n from "I18n";
 import User from "discourse/models/user";
 import { action } from "@ember/object";
+import { bind } from "discourse-common/utils/decorators";
+import { inject as service } from "@ember/service";
 
 export default DiscourseRoute.extend({
-  titleToken() {
-    const username = this.modelFor("user").username;
-    if (username) {
-      return [I18n.t("user.profile"), username];
-    }
-  },
-
-  @action
-  undoRevokeApiKey(key) {
-    key.undoRevoke();
-  },
-
-  @action
-  revokeApiKey(key) {
-    key.revoke();
-  },
+  router: service(),
+  searchService: service("search"),
+  appEvents: service("app-events"),
+  messageBus: service("message-bus"),
 
   beforeModel() {
     if (this.siteSettings.hide_user_profiles_from_public && !this.currentUser) {
-      this.replaceWith("discovery");
+      this.router.replaceWith("discovery");
     }
   },
 
@@ -47,7 +36,8 @@ export default DiscourseRoute.extend({
     return user
       .findDetails()
       .then(() => user.findStaffInfo())
-      .catch(() => this.replaceWith("/404"));
+      .then(() => user.trackStatus())
+      .catch(() => this.router.replaceWith("/404"));
   },
 
   serialize(model) {
@@ -60,35 +50,69 @@ export default DiscourseRoute.extend({
 
   setupController(controller, user) {
     controller.set("model", user);
-    this.searchService.set("searchContext", user.searchContext);
+    this.searchService.searchContext = user.searchContext;
   },
 
   activate() {
     this._super(...arguments);
 
     const user = this.modelFor("user");
-    this.messageBus.subscribe(`/u/${user.username_lower}`, (data) =>
-      user.loadUserAction(data)
+    this.messageBus.subscribe(`/u/${user.username_lower}`, this.onUserMessage);
+    this.messageBus.subscribe(
+      `/u/${user.username_lower}/counters`,
+      this.onUserCountersMessage
     );
-    this.messageBus.subscribe(`/u/${user.username_lower}/counters`, (data) => {
-      user.setProperties(data);
-      Object.entries(data).forEach(([key, value]) =>
-        this.appEvents.trigger(
-          `count-updated:${user.username_lower}:${key}`,
-          value
-        )
-      );
-    });
   },
 
   deactivate() {
     this._super(...arguments);
 
     const user = this.modelFor("user");
-    this.messageBus.unsubscribe(`/u/${user.username_lower}`);
-    this.messageBus.unsubscribe(`/u/${user.username_lower}/counters`);
+    this.messageBus.unsubscribe(
+      `/u/${user.username_lower}`,
+      this.onUserMessage
+    );
+    this.messageBus.unsubscribe(
+      `/u/${user.username_lower}/counters`,
+      this.onUserCountersMessage
+    );
+    user.stopTrackingStatus();
 
     // Remove the search context
-    this.searchService.set("searchContext", null);
+    this.searchService.searchContext = null;
+  },
+
+  @bind
+  onUserMessage(data) {
+    const user = this.modelFor("user");
+    return user.loadUserAction(data);
+  },
+
+  @bind
+  onUserCountersMessage(data) {
+    const user = this.modelFor("user");
+    user.setProperties(data);
+
+    Object.entries(data).forEach(([key, value]) =>
+      this.appEvents.trigger(
+        `count-updated:${user.username_lower}:${key}`,
+        value
+      )
+    );
+  },
+
+  titleToken() {
+    const username = this.modelFor("user").username;
+    return username ? username : null;
+  },
+
+  @action
+  undoRevokeApiKey(key) {
+    key.undoRevoke();
+  },
+
+  @action
+  revokeApiKey(key) {
+    key.revoke();
   },
 });

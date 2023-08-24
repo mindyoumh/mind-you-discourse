@@ -1,13 +1,30 @@
-import getURL, { getURLWithCDN } from "discourse-common/lib/get-url";
+import getURL from "discourse-common/lib/get-url";
 import Handlebars from "handlebars";
 import I18n from "I18n";
-import { deepMerge } from "discourse-common/lib/object";
 import { escape } from "pretty-text/sanitizer";
-import { helperContext } from "discourse-common/lib/helpers";
 import toMarkdown from "discourse/lib/to-markdown";
 import deprecated from "discourse-common/lib/deprecated";
+import * as AvatarUtils from "discourse-common/lib/avatar-utils";
+import { capabilities } from "discourse/services/capabilities";
 
 let _defaultHomepage;
+
+function deprecatedAvatarUtil(name) {
+  return function () {
+    deprecated(
+      `${name} should be imported from discourse-common/lib/avatar-utils instead of discourse/lib/utilities`,
+      { id: "discourse.avatar-utils" }
+    );
+    return AvatarUtils[name](...arguments);
+  };
+}
+
+export const translateSize = deprecatedAvatarUtil("translateSize");
+export const getRawSize = deprecatedAvatarUtil("getRawSize");
+export const getRawAvatarSize = deprecatedAvatarUtil("getRawAvatarSize");
+export const avatarUrl = deprecatedAvatarUtil("avatarUrl");
+export const avatarImg = deprecatedAvatarUtil("avatarImg");
+export const tinyAvatar = deprecatedAvatarUtil("tinyAvatar");
 
 export function splitString(str, separator = ",") {
   if (typeof str === "string") {
@@ -15,24 +32,6 @@ export function splitString(str, separator = ",") {
   } else {
     return [];
   }
-}
-
-export function translateSize(size) {
-  switch (size) {
-    case "tiny":
-      return 20;
-    case "small":
-      return 25;
-    case "medium":
-      return 32;
-    case "large":
-      return 45;
-    case "extra_large":
-      return 60;
-    case "huge":
-      return 120;
-  }
-  return size;
 }
 
 export function escapeExpression(string) {
@@ -58,51 +57,6 @@ export function replaceFormatter(fn) {
   _usernameFormatDelegate = fn;
 }
 
-export function avatarUrl(template, size) {
-  if (!template) {
-    return "";
-  }
-  const rawSize = getRawSize(translateSize(size));
-  return template.replace(/\{size\}/g, rawSize);
-}
-
-export function getRawSize(size) {
-  const pixelRatio = window.devicePixelRatio || 1;
-  let rawSize = 1;
-  if (pixelRatio > 1.1 && pixelRatio < 2.1) {
-    rawSize = 2;
-  } else if (pixelRatio >= 2.1) {
-    rawSize = 3;
-  }
-  return size * rawSize;
-}
-
-export function avatarImg(options, customGetURL) {
-  const size = translateSize(options.size);
-  let path = avatarUrl(options.avatarTemplate, size);
-
-  // We won't render an invalid url
-  if (!path || path.length === 0) {
-    return "";
-  }
-  path = (customGetURL || getURLWithCDN)(path);
-
-  const classes =
-    "avatar" + (options.extraClasses ? " " + options.extraClasses : "");
-
-  let title = "";
-  if (options.title) {
-    const escaped = escapeExpression(options.title || "");
-    title = ` title='${escaped}' aria-label='${escaped}'`;
-  }
-
-  return `<img loading='lazy' alt='' width='${size}' height='${size}' src='${path}' class='${classes}'${title}>`;
-}
-
-export function tinyAvatar(avatarTemplate, options) {
-  return avatarImg(deepMerge({ avatarTemplate, size: "tiny" }, options));
-}
-
 export function postUrl(slug, topicId, postNumber) {
   let url = getURL("/t/");
   if (slug) {
@@ -122,6 +76,9 @@ export function highlightPost(postNumber) {
   if (!container) {
     return;
   }
+
+  container.querySelector(".tabLoc")?.focus();
+
   const element = container.querySelector(".topic-body");
   if (!element || element.classList.contains("highlighted")) {
     return;
@@ -134,23 +91,24 @@ export function highlightPost(postNumber) {
     element.removeEventListener("animationend", removeHighlighted);
   };
   element.addEventListener("animationend", removeHighlighted);
-  container.querySelector(".tabLoc").focus();
 }
 
 export function emailValid(email) {
   // see:  http://stackoverflow.com/questions/46155/validate-email-address-in-javascript
-  const re = /^[a-zA-Z0-9!#$%&'*+\/=?\^_`{|}~\-]+(?:\.[a-zA-Z0-9!#$%&'\*+\/=?\^_`{|}~\-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?$/;
+  const re =
+    /^[a-zA-Z0-9!#$%&'*+\/=?\^_`{|}~\-]+(?:\.[a-zA-Z0-9!#$%&'\*+\/=?\^_`{|}~\-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9\-]*[a-zA-Z0-9])?$/;
   return re.test(email);
 }
 
 export function hostnameValid(hostname) {
   // see:  https://stackoverflow.com/questions/106179/regular-expression-to-match-dns-hostname-or-ip-address
-  const re = /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/;
+  const re =
+    /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/;
   return hostname && re.test(hostname);
 }
 
 export function extractDomainFromUrl(url) {
-  if (url.indexOf("://") > -1) {
+  if (url.includes("://")) {
     url = url.split("/")[2];
   } else {
     url = url.split("/")[0];
@@ -164,49 +122,53 @@ export function selectedText() {
     return "";
   }
 
-  const $div = $("<div>");
+  const div = document.createElement("div");
   for (let r = 0; r < selection.rangeCount; r++) {
     const range = selection.getRangeAt(r);
-    const $ancestor = $(range.commonAncestorContainer);
+    const ancestor =
+      range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement;
 
     // ensure we never quote text in the post menu area
-    const $postMenuArea = $ancestor.find(".post-menu-area")[0];
-    if ($postMenuArea) {
-      range.setEndBefore($postMenuArea);
+    const postMenuArea = ancestor.querySelector(".post-menu-area");
+    if (postMenuArea) {
+      range.setEndBefore(postMenuArea);
     }
 
-    const $oneboxTest = $ancestor.closest("aside.onebox[data-onebox-src]");
-    const $codeBlockTest = $ancestor.parents("pre");
-    if ($codeBlockTest.length) {
-      const $code = $("<code>");
-      $code.append(range.cloneContents());
+    const oneboxTest = ancestor.closest("aside.onebox[data-onebox-src]");
+    const codeBlockTest = ancestor.closest("pre");
+    if (codeBlockTest) {
+      const code = document.createElement("code");
+      code.append(range.cloneContents());
+
       // Even though this was a code block, produce a non-block quote if it's a single line.
-      if (/\n/.test($code.text())) {
-        const $pre = $("<pre>");
-        $pre.append($code);
-        $div.append($pre);
+      if (/\n/.test(code.innerText)) {
+        const pre = document.createElement("pre");
+        pre.append(code);
+        div.append(pre);
       } else {
-        $div.append($code);
+        div.append(code);
       }
-    } else if ($oneboxTest.length) {
+    } else if (oneboxTest) {
       // This is a partial quote from a onebox.
       // Treat it as though the entire onebox was quoted.
-      const oneboxUrl = $($oneboxTest).data("onebox-src");
-      $div.append(oneboxUrl);
+      const oneboxUrl = oneboxTest.dataset.oneboxSrc;
+      div.append(oneboxUrl);
     } else {
-      $div.append(range.cloneContents());
+      div.append(range.cloneContents());
     }
   }
 
-  $div.find("aside.onebox[data-onebox-src]").each(function () {
-    const oneboxUrl = $(this).data("onebox-src");
-    $(this).replaceWith(oneboxUrl);
+  div.querySelectorAll("aside.onebox[data-onebox-src]").forEach((element) => {
+    const oneboxUrl = element.dataset.oneboxSrc;
+    element.replaceWith(oneboxUrl);
   });
 
-  return toMarkdown($div.html());
+  return toMarkdown(div.outerHTML);
 }
 
-export function selectedElement() {
+export function selectedNode() {
   return selectedRange()?.commonAncestorContainer;
 }
 
@@ -255,14 +217,10 @@ export function setCaretPosition(ctrl, pos) {
 }
 
 export function initializeDefaultHomepage(siteSettings) {
-  let homepage;
-  let sel = document.querySelector("meta[name='discourse_current_homepage']");
-  if (sel) {
-    homepage = sel.getAttribute("content");
-  }
-  if (!homepage) {
-    homepage = siteSettings.top_menu.split("|")[0].split(",")[0];
-  }
+  const sel = document.querySelector("meta[name='discourse_current_homepage']");
+  const homepage =
+    sel?.getAttribute("content") ||
+    siteSettings.top_menu.split("|")[0].split(",")[0];
   setDefaultHomepage(homepage);
 }
 
@@ -312,7 +270,7 @@ export function determinePostReplaceSelection({
 export function isAppleDevice() {
   // IE has no DOMNodeInserted so can not get this hack despite saying it is like iPhone
   // This will apply hack on all iDevices
-  let caps = helperContext().capabilities;
+  let caps = capabilities;
   return caps.isIOS && !window.navigator.userAgent.match(/Trident/g);
 }
 
@@ -333,6 +291,7 @@ export function safariHacksDisabled() {
     {
       since: "2.8.0.beta8",
       dropFrom: "2.9.0.beta1",
+      id: "discourse.safari-hacks-disabled",
     }
   );
 
@@ -439,7 +398,7 @@ export function areCookiesEnabled() {
   // see: https://github.com/Modernizr/Modernizr/blob/400db4043c22af98d46e1d2b9cbc5cb062791192/feature-detects/cookies.js
   try {
     document.cookie = "cookietest=1";
-    let ret = document.cookie.indexOf("cookietest=") !== -1;
+    let ret = document.cookie.includes("cookietest=");
     document.cookie = "cookietest=1; expires=Thu, 01-Jan-1970 00:00:01 GMT";
     return ret;
   } catch (e) {
@@ -457,18 +416,19 @@ export function postRNWebviewMessage(prop, value) {
   }
 }
 
-const CODE_BLOCKS_REGEX = /^(    |\t).*|`[^`]+`|^```[^]*?^```|\[code\][^]*?\[\/code\]/gm;
-//                        |      ^     |   ^   |      ^      |           ^           |
-//                               |         |          |                  |
-//                               |         |          |       code blocks between [code]
-//                               |         |          |
-//                               |         |          +--- code blocks between three backticks
-//                               |         |
-//                               |         +----- inline code between backticks
-//                               |
-//                               +------- paragraphs starting with 4 spaces or tab
+const CODE_BLOCKS_REGEX =
+  /^(  |\t).*|`[^`]+`|^```[^]*?^```|\[code\][^]*?\[\/code\]/gm;
+//|    ^     |   ^   |      ^      |           ^           |
+//     |         |          |                  |
+//     |         |          |       code blocks between [code]
+//     |         |          |
+//     |         |          +--- code blocks between three backticks
+//     |         |
+//     |         +----- inline code between backticks
+//     |
+//     +------- paragraphs starting with 2 spaces or tab
 
-const OPEN_CODE_BLOCKS_REGEX = /`[^`]+|^```[^]*?|\[code\][^]*?/gm;
+const OPEN_CODE_BLOCKS_REGEX = /^(  |\t).*|`[^`]+|^```[^]*?|\[code\][^]*?/gm;
 
 export function inCodeBlock(text, pos) {
   let end = 0;
@@ -486,21 +446,29 @@ export function inCodeBlock(text, pos) {
   return lastOpenBlock !== -1 && pos >= end + lastOpenBlock;
 }
 
+// Return an array of modifier keys that are pressed during a given `MouseEvent`
+// or `KeyboardEvent`.
+export function modKeysPressed(event) {
+  return ["alt", "shift", "meta", "ctrl"].filter((key) => event[`${key}Key`]);
+}
+
 export function translateModKey(string) {
-  const { isApple } = helperContext().capabilities;
+  const { isApple } = capabilities;
   // Apple device users are used to glyphs for shortcut keys
   if (isApple) {
     string = string
-      .replace("Shift", "\u21E7")
-      .replace("Meta", "\u2318")
-      .replace("Alt", "\u2325")
+      .toLowerCase()
+      .replace("shift", "\u21E7")
+      .replace("meta", "\u2318")
+      .replace("alt", "\u2325")
       .replace(/\+/g, "");
   } else {
     string = string
-      .replace("Shift", I18n.t("shortcut_modifier_key.shift"))
-      .replace("Ctrl", I18n.t("shortcut_modifier_key.ctrl"))
-      .replace("Meta", I18n.t("shortcut_modifier_key.ctrl"))
-      .replace("Alt", I18n.t("shortcut_modifier_key.alt"));
+      .toLowerCase()
+      .replace("shift", I18n.t("shortcut_modifier_key.shift"))
+      .replace("ctrl", I18n.t("shortcut_modifier_key.ctrl"))
+      .replace("meta", I18n.t("shortcut_modifier_key.ctrl"))
+      .replace("alt", I18n.t("shortcut_modifier_key.alt"));
   }
 
   return string;
@@ -524,7 +492,7 @@ export function clipboardCopy(text) {
   return clipboardCopyFallback(text);
 }
 
-// Use this verison of clipboardCopy if you must use an AJAX call
+// Use this version of clipboardCopy if you must use an AJAX call
 // to retrieve/generate server-side text to copy to the clipboard,
 // otherwise this write function will error in certain browsers, because
 // the time taken from the user event to the clipboard text being copied
@@ -603,5 +571,44 @@ function clipboardCopyFallback(text) {
   return success;
 }
 
-// This prevents a mini racer crash
-export default {};
+// this function takes 2 sorted lists and returns another sorted list that
+// contains both of the original lists.
+// you need to provide a callback as the 3rd argument that will be called with
+// an item from the first list (1st callback argument) and another item from
+// the second list (2nd callback argument). The callback should return true if
+// its 2nd argument should go before its 1st argument and return false
+// otherwise.
+export function mergeSortedLists(list1, list2, comparator) {
+  let index1 = 0;
+  let index2 = 0;
+  const merged = [];
+  while (index1 < list1.length || index2 < list2.length) {
+    if (
+      index1 === list1.length ||
+      (index2 < list2.length && comparator(list1[index1], list2[index2]))
+    ) {
+      merged.push(list2[index2]);
+      index2++;
+    } else {
+      merged.push(list1[index1]);
+      index1++;
+    }
+  }
+  return merged;
+}
+
+export function getCaretPosition(element, options) {
+  const jqueryElement = $(element);
+  const position = jqueryElement.caretPosition(options);
+
+  // Get the position of the textarea on the page
+  const textareaRect = element.getBoundingClientRect();
+
+  // Calculate the x and y coordinates by adding the element's position
+  const adjustedPosition = {
+    x: position.left + textareaRect.left,
+    y: position.top + textareaRect.top,
+  };
+
+  return adjustedPosition;
+}

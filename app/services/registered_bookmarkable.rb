@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 #
-# Should only be created via the Bookmark.register_bookmarkable
+# Should only be created via the Plugin::Instance#register_bookmarkable
 # method; this is used to let the BookmarkQuery class query and
 # search additional bookmarks for the user bookmark list, and
 # also to enumerate on the registered RegisteredBookmarkable types.
@@ -11,7 +11,7 @@
 # when trying to save the Bookmark record. All things that are bookmarkable
 # must be registered in this way.
 #
-# See Bookmark#reset_bookmarkables for some examples on how registering
+# See Plugin::Instance#register_bookmarkable for some examples on how registering
 # bookmarkables works.
 #
 # See BaseBookmarkable for documentation on what return types should be
@@ -55,18 +55,23 @@ class RegisteredBookmarkable
   #
   # [{ topic: [:topic_users, :tags] }, :user]
   #
+  # For more advanced preloading, bookmarkable classes can implement `perform_custom_preload!`
+  #
   # @param [Array] bookmarks The array of bookmarks after initial listing and filtering, note this is
   #                          array _not_ an ActiveRecord::Relation.
   # @return [void]
-  def perform_preload(bookmarks)
-    return if !bookmarkable_klass.has_preloads?
+  def perform_preload(bookmarks, guardian)
+    bookmarks_of_type = Bookmark.select_type(bookmarks, bookmarkable_klass.model.to_s)
+    return if bookmarks_of_type.empty?
 
-    ActiveRecord::Associations::Preloader
-      .new(
-        records: Bookmark.select_type(bookmarks, bookmarkable_klass.model.to_s),
-        associations: [bookmarkable: bookmarkable_klass.preload_associations]
-      )
-      .call
+    if bookmarkable_klass.has_preloads?
+      ActiveRecord::Associations::Preloader.new(
+        records: bookmarks_of_type,
+        associations: [bookmarkable: bookmarkable_klass.preload_associations],
+      ).call
+    end
+
+    bookmarkable_klass.perform_custom_preload!(bookmarks_of_type, guardian)
   end
 
   def can_send_reminder?(bookmark)
@@ -95,5 +100,9 @@ class RegisteredBookmarkable
 
   def after_destroy(guardian, bookmark, opts = {})
     bookmarkable_klass.after_destroy(guardian, bookmark, opts)
+  end
+
+  def cleanup_deleted
+    bookmarkable_klass.cleanup_deleted
   end
 end

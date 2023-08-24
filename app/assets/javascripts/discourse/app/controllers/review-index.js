@@ -42,9 +42,11 @@ export default Controller.extend({
   @discourseComputed("reviewableTypes")
   allTypes() {
     return (this.reviewableTypes || []).map((type) => {
+      const translationKey = underscore(type).replace(/[^\w]+/g, "_");
+
       return {
         id: type,
-        name: I18n.t(`review.types.${underscore(type)}.title`),
+        name: I18n.t(`review.types.${translationKey}.title`),
       };
     });
   },
@@ -106,7 +108,7 @@ export default Controller.extend({
       }
 
       let newList = this.reviewables.reject((reviewable) => {
-        return ids.indexOf(reviewable.id) !== -1;
+        return ids.includes(reviewable.id);
       });
 
       if (newList.length === 0) {

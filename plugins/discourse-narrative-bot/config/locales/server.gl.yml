@@ -45,9 +45,6 @@ gl:
       trigger: "pregar"
       invalid: |-
         Laméntoo, é matematicamente imposíbel lograr esa combinación de dados :confounded:
-      not_enough_dice:
-        one: "Só teño %{count} dado. [Shameful](https://www.toplessrobot.com/2009/04/the_10_most_shameful_rpg_dice.php), Seino!"
-        other: "Só teño %{count} dados. [Shameful](https://www.toplessrobot.com/2009/04/the_10_most_shameful_rpg_dice.php), Seino!"
       out_of_range: |-
         Sabía que [o número máximo de lados] (https://www.wired.com/2016/05/mathematical-challenge-of-designing-the-worlds-most-complex-120-sided-dice) para un dado matematicamente equitativo é 120?
       results: |-
@@ -357,16 +354,6 @@ gl:
 
           Teña en conta que só ten %{deletion_after} hora(s) para recuperar unha publicación.
       category_hashtag:
-        instructions: |-
-          Sabía que pode referenciar categorías e etiquetas na súa publicación? Por exemplo, viu a categoría %{category} ?
-
-          Escriba `#` no medio dunha frase e seleccione calquera categoría ou etiqueta.
-        not_found: |-
-          Umm, non vexo ningunha categoría alí. Teña en conta que `#` non pode ser o primeiro personaxe. Pode copiar isto na súa próxima resposta?
-
-          ```texto
-          Podo crear unha ligazón de categoría co número #
-          ```
         reply: |-
           Excelente! Lembre que isto funciona para ambas as categorías _e_ etiquetas, se as etiquetas están activadas.
       change_topic_notification_level:

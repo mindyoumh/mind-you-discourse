@@ -2,8 +2,9 @@ import DiscourseRoute from "discourse/routes/discourse";
 import PreloadStore from "discourse/lib/preload-store";
 import { ajax } from "discourse/lib/ajax";
 import { extractError } from "discourse/lib/ajax-error";
+import DisableSidebar from "discourse/mixins/disable-sidebar";
 
-export default DiscourseRoute.extend({
+export default DiscourseRoute.extend(DisableSidebar, {
   queryParams: {
     nonce: { refreshModel: true },
   },
@@ -29,6 +30,7 @@ export default DiscourseRoute.extend({
   setupController(controller, model) {
     this._super(...arguments);
     controller.resetState();
+
     if (model.error) {
       controller.displayError(model.error);
       controller.set("loadError", true);

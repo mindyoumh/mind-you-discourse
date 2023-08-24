@@ -6,6 +6,7 @@ import ResultSet from "discourse/models/result-set";
 import { ajax } from "discourse/lib/ajax";
 import { getRegister } from "discourse-common/lib/get-owner";
 import { underscore } from "@ember/string";
+import { warn } from "@ember/debug";
 
 let _identityMap;
 
@@ -141,7 +142,13 @@ export default Service.extend({
       hydrated.get("content").map((item) => {
         let staleItem = stale.content.findBy(primaryKey, item.get(primaryKey));
         if (staleItem) {
-          staleItem.setProperties(item);
+          for (const [key, value] of Object.entries(
+            Object.getOwnPropertyDescriptors(staleItem)
+          )) {
+            if (value.writable && value.enumerable) {
+              staleItem.set(key, value.value);
+            }
+          }
         } else {
           staleItem = item;
         }
@@ -260,8 +267,10 @@ export default Service.extend({
     obj.__state = obj[adapter.primaryKey] ? "created" : "new";
 
     // TODO: Have injections be automatic
-    obj.topicTrackingState = this.register.lookup("topic-tracking-state:main");
-    obj.keyValueStore = this.register.lookup("key-value-store:main");
+    obj.topicTrackingState = this.register.lookup(
+      "service:topic-tracking-state"
+    );
+    obj.keyValueStore = this.register.lookup("service:key-value-store");
 
     const klass = this.register.lookupFactory("model:" + type) || RestModel;
     const model = klass.create(obj);
@@ -317,9 +326,18 @@ export default Service.extend({
         const subType = m[1];
 
         if (m[2]) {
+          if (!Array.isArray(obj[k])) {
+            warn(`Expected an array of resource ids for ${type}.${k}`, {
+              id: "discourse.store.hydrate-embedded",
+            });
+
+            return;
+          }
+
           const hydrated = obj[k].map((id) =>
             this._lookupSubType(subType, type, id, root)
           );
+
           obj[this.pluralize(subType)] = hydrated || [];
           delete obj[k];
         } else {

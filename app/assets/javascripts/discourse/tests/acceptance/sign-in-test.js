@@ -2,7 +2,7 @@ import {
   acceptance,
   count,
   exists,
-  queryAll,
+  query,
 } from "discourse/tests/helpers/qunit-helpers";
 import { click, fillIn, visit } from "@ember/test-helpers";
 import { test } from "qunit";
@@ -23,6 +23,17 @@ acceptance("Signing In", function () {
       "enables the login button"
     );
 
+    // Test password unmasking
+    assert.ok(
+      exists("#login-account-password[type='password']"),
+      "password is masked by default"
+    );
+    await click(".toggle-password-mask");
+    assert.ok(
+      exists("#login-account-password[type='text']"),
+      "password is unmasked after toggle is clicked"
+    );
+
     // Use the correct password
     await fillIn("#login-account-password", "correct");
     await click(".modal-footer .btn-primary");
@@ -41,14 +52,14 @@ acceptance("Signing In", function () {
     await fillIn("#login-account-password", "not-activated");
     await click(".modal-footer .btn-primary");
     assert.strictEqual(
-      queryAll(".modal-body b").text(),
+      query(".modal-body b").innerText,
       "<small>eviltrout@example.com</small>"
     );
     assert.ok(!exists(".modal-body small"), "it escapes the email address");
 
     await click(".modal-footer button.resend");
     assert.strictEqual(
-      queryAll(".modal-body b").text(),
+      query(".modal-body b").innerText,
       "<small>current@example.com</small>"
     );
     assert.ok(!exists(".modal-body small"), "it escapes the email address");
@@ -64,7 +75,7 @@ acceptance("Signing In", function () {
     await click(".modal-footer .btn-primary");
     await click(".modal-footer button.edit-email");
     assert.strictEqual(
-      queryAll(".activate-new-email").val(),
+      query(".activate-new-email").value,
       "current@example.com"
     );
     assert.strictEqual(
@@ -76,7 +87,7 @@ acceptance("Signing In", function () {
     assert.ok(!exists(".modal-footer .btn-primary:disabled"));
     await click(".modal-footer .btn-primary");
     assert.strictEqual(
-      queryAll(".modal-body b").text(),
+      query(".modal-body b").innerText,
       "different@example.com"
     );
   });
@@ -160,7 +171,7 @@ acceptance("Signing In", function () {
     );
     await click(".modal-footer .btn-primary");
 
-    await fillIn("#new-account-username", "goodtuna");
+    await fillIn("#new-account-username", "good-tuna");
     assert.ok(
       exists("#username-validation.good"),
       "the username validation is good"

@@ -1,5 +1,3 @@
-import { isLegacyEmber } from "discourse-common/config/environment";
-import { run } from "@ember/runloop";
 import tippy from "tippy.js";
 import { iconHTML } from "discourse-common/lib/icon-library";
 
@@ -26,26 +24,23 @@ export const hideOnEscapePlugin = {
   },
 };
 
+export function isPopoverShown(event) {
+  const instance = event.target._tippy;
+  return instance?.state.isShown;
+}
+
 // legacy, shouldn't be needed with setup
 export function hidePopover(event) {
-  if (event?.target?._tippy) {
-    showPopover(event);
+  const instance = event.target._tippy;
+
+  if (instance?.state.isShown) {
+    instance.hide();
   }
 }
 
 // legacy, setup() should be used
 export function showPopover(event, options = {}) {
-  const instance = event.target._tippy
-    ? event.target._tippy
-    : setup(event.target, options);
-
-  // hangs on legacy ember
-  if (!isLegacyEmber) {
-    run.begin();
-    instance.popper.addEventListener("transitionend", run.end, {
-      once: true,
-    });
-  }
+  const instance = event.target._tippy ?? setup(event.target, options);
 
   if (instance.state.isShown) {
     instance.hide();
@@ -72,8 +67,7 @@ export default function setup(target, options) {
     options
   );
 
-  // legacy support
-  delete tippyOptions.textContent;
+  // legacy support delete tippyOptions.textContent;
   delete tippyOptions.htmlContent;
 
   return tippy(target, tippyOptions);

@@ -1,7 +1,6 @@
 import { click, fillIn, visit } from "@ember/test-helpers";
 import {
   acceptance,
-  count,
   exists,
   fakeTime,
   loggedInUser,
@@ -57,15 +56,15 @@ acceptance("Invites - Create & Edit Invite Modal", function (needs) {
     await visit("/u/eviltrout/invited/pending");
     await click(".user-invite-buttons .btn:first-child");
 
-    assert.ok(!exists("tbody tr"), "does not show invite before saving");
+    assert
+      .dom("table.user-invite-list tbody tr")
+      .exists({ count: 2 }, "is seeded with two rows");
 
     await click(".btn-primary");
 
-    assert.strictEqual(
-      count("tbody tr"),
-      1,
-      "adds invite to list after saving"
-    );
+    assert
+      .dom("table.user-invite-list tbody tr")
+      .exists({ count: 3 }, "gets added to the list");
   });
 
   test("copying saves invite", async function (assert) {
@@ -151,15 +150,15 @@ acceptance("Invites - Email Invites", function (needs) {
     assert.ok(exists(".save-invite"), "shows save without email button");
     await click(".save-invite");
     assert.ok(
-      lastRequest.requestBody.indexOf("skip_email=true") !== -1,
+      lastRequest.requestBody.includes("skip_email=true"),
       "sends skip_email to server"
     );
 
-    await fillIn("#invite-email", "test2@example.com");
+    await fillIn("#invite-email", "test2@example.com ");
     assert.ok(exists(".send-invite"), "shows save and send email button");
     await click(".send-invite");
     assert.ok(
-      lastRequest.requestBody.indexOf("send_email=true") !== -1,
+      lastRequest.requestBody.includes("send_email=true"),
       "sends send_email to server"
     );
   });
@@ -191,7 +190,7 @@ acceptance(
     });
 
     needs.hooks.beforeEach(() => {
-      const timezone = loggedInUser().timezone;
+      const timezone = loggedInUser().user_option.timezone;
       clock = fakeTime("2100-05-03T08:00:00", timezone, true); // Monday morning
     });
 
@@ -226,6 +225,20 @@ acceptance(
       ];
 
       assert.deepEqual(options, expected, "options are correct");
+    });
+  }
+);
+
+acceptance(
+  "Invites - Create Invite on Site with must_approve_users Setting",
+  function (needs) {
+    needs.user();
+    needs.settings({ must_approve_users: true });
+
+    test("hides `Arrive at Topic` field on sites with `must_approve_users`", async function (assert) {
+      await visit("/u/eviltrout/invited/pending");
+      await click(".user-invite-buttons .btn:first-child");
+      assert.ok(!exists(".invite-to-topic"));
     });
   }
 );

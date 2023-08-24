@@ -34,12 +34,12 @@ export default Controller.extend(
 
     @discourseComputed("buffered.emailOrDomain")
     isEmail(emailOrDomain) {
-      return emailValid(emailOrDomain);
+      return emailValid(emailOrDomain?.trim());
     },
 
     @discourseComputed("buffered.emailOrDomain")
     isDomain(emailOrDomain) {
-      return hostnameValid(emailOrDomain);
+      return hostnameValid(emailOrDomain?.trim());
     },
 
     isLink: not("isEmail"),
@@ -83,9 +83,9 @@ export default Controller.extend(
 
       if (data.emailOrDomain) {
         if (emailValid(data.emailOrDomain)) {
-          data.email = data.emailOrDomain;
+          data.email = data.emailOrDomain?.trim();
         } else if (hostnameValid(data.emailOrDomain)) {
-          data.domain = data.emailOrDomain;
+          data.domain = data.emailOrDomain?.trim();
         }
         delete data.emailOrDomain;
       }
@@ -123,10 +123,6 @@ export default Controller.extend(
       return this.invite
         .save(data)
         .then(() => {
-          if (!this.invite.id) {
-            return;
-          }
-
           this.rollbackBuffer();
 
           if (
@@ -182,9 +178,17 @@ export default Controller.extend(
       return staff || groups.any((g) => g.owner);
     },
 
+    @discourseComputed("currentUser.staff")
+    canArriveAtTopic(staff) {
+      if (staff && !this.siteSettings.must_approve_users) {
+        return true;
+      }
+      return false;
+    },
+
     @discourseComputed
     timeShortcuts() {
-      const timezone = this.currentUser.timezone;
+      const timezone = this.currentUser.user_option.timezone;
       const shortcuts = timeShortcuts(timezone);
       return [
         shortcuts.laterToday(),

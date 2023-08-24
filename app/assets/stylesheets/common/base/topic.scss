@@ -32,6 +32,7 @@ $topic-progress-height: 42px;
     max-width: calc(
       100vw - 20px
     ); // 20px is the left + right padding on .wrap in common/base/discourse.scss
+    min-width: 0; // grid needs to be able to shrink
   }
 
   .timeline-container {
@@ -68,7 +69,7 @@ $topic-progress-height: 42px;
       overflow-y: auto;
       z-index: z("timeline");
       padding: 10px 10px 35px 10px;
-      box-shadow: shadow("dropdown");
+      box-shadow: var(--shadow-dropdown);
       background: var(--tertiary-low);
 
       .close {
@@ -146,7 +147,8 @@ $topic-progress-height: 42px;
   &.docked {
     position: initial;
     .topic-admin-popup-menu.right-side {
-      bottom: -150px; // Prevents menu from being too high when a topic is very short
+      bottom: unset;
+      right: 10px;
     }
   }
 
@@ -191,8 +193,8 @@ $topic-progress-height: 42px;
   }
   h4 {
     display: inline;
-    font-size: $font-up-2;
-    line-height: $line-height-small;
+    font-size: var(--font-up-2);
+    line-height: var(--line-height-small);
   }
   .d-icon {
     position: absolute;
@@ -213,12 +215,15 @@ $topic-progress-height: 42px;
 .topic-timer-info {
   border-top: 1px solid var(--primary-low);
   margin: 0;
-  max-width: 758px;
+  max-width: calc(
+    var(--topic-body-width) + (var(--topic-body-width-padding) * 2) +
+      var(--topic-avatar-width)
+  );
   &:empty {
     padding: 0;
   }
   span .d-icon {
-    font-size: $font-down-1;
+    font-size: var(--font-down-1);
   }
   .topic-timer-heading,
   .slow-mode-heading {
@@ -234,7 +239,7 @@ $topic-progress-height: 42px;
     align-self: flex-start;
   }
   button {
-    font-size: $font-down-2;
+    font-size: var(--font-down-2);
     background: transparent;
   }
 }
@@ -287,23 +292,31 @@ a.badge-category {
     display: flex;
     flex-wrap: wrap;
     box-sizing: border-box;
-    max-width: 758px;
+    max-width: calc(
+      var(--topic-body-width) + (var(--topic-body-width-padding) * 2) +
+        var(--topic-avatar-width)
+    );
     #edit-title {
-      flex: 1 1 auto;
+      flex: 1 1 100%;
     }
     .category-chooser,
     .mini-tag-chooser {
-      flex: 1 1 49%;
+      flex: 1 1 35%;
       margin: 0 0 9px 0;
       @media all and (max-width: 500px) {
         flex: 1 1 100%;
       }
     }
     .mini-tag-chooser {
-      margin-left: 2%;
+      flex: 1 1 54%;
+      margin: 0 0 9px 0;
+      margin-left: 1%; // category at 40%, tag chooser at 58%
       @media all and (max-width: 500px) {
         margin-left: 0;
       }
+    }
+    .edit-controls {
+      flex: 1 1 100%;
     }
     .select-kit .category-row {
       max-width: unset;
@@ -350,47 +363,9 @@ a.badge-category {
   justify-content: space-between;
 
   padding: 0.5em;
-  background-color: var(--highlight-medium);
+  background-color: var(--highlight-bg);
   margin-top: 1em;
   max-width: 757px;
-}
-
-.suggested-topics-wrapper.related-messages-wrapper {
-  .suggested-topics:nth-of-type(n + 2) {
-    thead {
-      display: none;
-    }
-  }
-}
-
-// Target the .badge-category text, the bullet icon needs to maintain `display: block`
-.suggested-topics h3 .badge-wrapper.bullet span.badge-category,
-.suggested-topics h3 .badge-wrapper.box span,
-.suggested-topics h3 .badge-wrapper.bar span {
-  display: inline;
-}
-
-.suggested-topics h3 .badge-wrapper.bullet span.badge-category {
-  // Override vertical-align: text-top from `badges.css.scss`
-  vertical-align: baseline;
-  line-height: $line-height-medium;
-}
-
-.suggested-topics h3 .badge-wrapper.bullet,
-.suggested-topics h3 .badge-wrapper.bullet span.badge-category-parent-bg,
-.suggested-topics h3 .badge-wrapper.bullet span.badge-category-bg {
-  // Top of bullet aligns with top of line - adjust line height to vertically align bullet.
-  line-height: 0.8;
-}
-
-.suggested-topics .badge-wrapper.bullet span.badge-category,
-.suggested-topics .badge-wrapper.bar span.badge-category {
-  max-width: 150px;
-}
-
-.suggested-topics .suggested-topics-title {
-  display: flex;
-  align-items: center;
 }
 
 .post-links-container {
@@ -427,7 +402,7 @@ a.badge-category {
         flex: 0 0 auto;
       }
       .d-icon {
-        font-size: $font-down-2;
+        font-size: var(--font-down-2);
         margin: 0 0.5em 0 0;
       }
     }
@@ -460,8 +435,8 @@ a.topic-featured-link {
 .topic-area {
   .pending-posts {
     max-width: calc(
-      #{$topic-body-width} + #{$topic-avatar-width} + #{$topic-body-width-padding *
-        2}
+      var(--topic-body-width) + (var(--topic-body-width-padding) * 2) +
+        var(--topic-avatar-width)
     );
     .reviewable-item {
       .post-body {
@@ -476,14 +451,14 @@ a.topic-featured-link {
   justify-content: space-between;
   padding-bottom: 1em;
   max-width: calc(
-    #{$topic-body-width} + #{$topic-avatar-width} + #{$topic-body-width-padding *
-      2}
+    var(--topic-body-width) + (var(--topic-body-width-padding) * 2) +
+      var(--topic-avatar-width)
   );
   align-items: center;
 
   .is-public {
     padding: 0.25em 0.5em;
-    font-size: $font-down-2;
+    font-size: var(--font-down-2);
     background: var(--tertiary);
     color: var(--secondary);
     border-radius: 3px;

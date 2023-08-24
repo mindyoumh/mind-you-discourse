@@ -11,19 +11,25 @@ import {
   mergeSettings,
 } from "discourse/tests/helpers/site-settings";
 import { forceMobile, resetMobile } from "discourse/lib/mobile";
-import { getApplication, getContext, settled } from "@ember/test-helpers";
+import {
+  fillIn,
+  getApplication,
+  settled,
+  triggerKeyEvent,
+} from "@ember/test-helpers";
 import { getOwner } from "discourse-common/lib/get-owner";
 import { run } from "@ember/runloop";
 import { setupApplicationTest } from "ember-qunit";
-import { Promise } from "rsvp";
 import Site from "discourse/models/site";
 import User from "discourse/models/user";
 import { _clearSnapshots } from "select-kit/components/composer-actions";
 import { clearHTMLCache } from "discourse/helpers/custom-html";
 import deprecated from "discourse-common/lib/deprecated";
 import { restoreBaseUri } from "discourse-common/lib/get-url";
-import { flushMap } from "discourse/services/store";
-import { initSearchData } from "discourse/widgets/search-menu";
+import {
+  initSearchData,
+  resetOnKeyDownCallbacks,
+} from "discourse/widgets/search-menu";
 import { resetPostMenuExtraButtons } from "discourse/widgets/post-menu";
 import { isEmpty } from "@ember/utils";
 import { resetCustomPostMessageCallbacks } from "discourse/controllers/topic";
@@ -38,6 +44,7 @@ import { resetUserSearchCache } from "discourse/lib/user-search";
 import { resetCardClickListenerSelector } from "discourse/mixins/card-contents-base";
 import { resetComposerCustomizations } from "discourse/models/composer";
 import { resetQuickSearchRandomTips } from "discourse/widgets/search-menu-results";
+import { resetUserMenuProfileTabItems } from "discourse/components/user-menu/profile-tab-content";
 import sessionFixtures from "discourse/tests/fixtures/session-fixtures";
 import {
   resetHighestReadCache,
@@ -45,7 +52,10 @@ import {
 } from "discourse/lib/topic-list-tracker";
 import sinon from "sinon";
 import siteFixtures from "discourse/tests/fixtures/site-fixtures";
-import { clearExtraKeyboardShortcutHelp } from "discourse/lib/keyboard-shortcuts";
+import {
+  PLATFORM_KEY_MODIFIER,
+  clearExtraKeyboardShortcutHelp,
+} from "discourse/lib/keyboard-shortcuts";
 import { clearResolverOptions } from "discourse-common/resolver";
 import { clearNavItems } from "discourse/models/nav-item";
 import {
@@ -53,6 +63,7 @@ import {
   cleanUpComposerUploadMarkdownResolver,
   cleanUpComposerUploadPreProcessor,
 } from "discourse/components/composer-editor";
+import { cleanUpHashtagTypeClasses } from "discourse/lib/hashtag-autocomplete";
 import { resetLastEditNotificationClick } from "discourse/models/post-stream";
 import { clearAuthMethods } from "discourse/models/login-method";
 import { clearTopicFooterDropdowns } from "discourse/lib/register-topic-footer-dropdown";
@@ -63,13 +74,23 @@ import {
   setTestPresence,
 } from "discourse/lib/user-presence";
 import PreloadStore from "discourse/lib/preload-store";
-import { resetDefaultSectionLinks as resetTopicsSectionLinks } from "discourse/lib/sidebar/custom-topics-section-links";
+import { resetDefaultSectionLinks as resetTopicsSectionLinks } from "discourse/lib/sidebar/custom-community-section-links";
 import {
   clearBlockDecorateCallbacks,
   clearTagDecorateCallbacks,
+  clearTextDecorateCallbacks,
 } from "discourse/lib/to-markdown";
-
-const LEGACY_ENV = !setupApplicationTest;
+import { clearTagsHtmlCallbacks } from "discourse/lib/render-tags";
+import { clearToolbarCallbacks } from "discourse/components/d-editor";
+import { clearExtraHeaderIcons } from "discourse/widgets/header";
+import { resetNotificationTypeRenderers } from "discourse/lib/notification-types-manager";
+import { resetSidebarPanels } from "discourse/lib/sidebar/custom-sections";
+import { resetUserMenuTabs } from "discourse/lib/user-menu/tab";
+import { reset as resetLinkLookup } from "discourse/lib/link-lookup";
+import { resetMentions } from "discourse/lib/link-mentions";
+import { resetModelTransformers } from "discourse/lib/model-transformers";
+import { cleanupTemporaryModuleRegistrations } from "./temporary-module-helper";
+import { clearBulkButtons } from "discourse/components/modal/topic-bulk-actions";
 
 export function currentUser() {
   return User.create(sessionFixtures["/session/current.json"].current_user);
@@ -106,6 +127,7 @@ export function fakeTime(timeString, timezone = null, advanceTime = false) {
   return sinon.useFakeTimers({
     now: now.valueOf(),
     shouldAdvanceTime: advanceTime,
+    shouldClearNativeTimers: true,
   });
 }
 
@@ -120,14 +142,13 @@ export function withFrozenTime(timeString, timezone, callback) {
 
 let _pretenderCallbacks = {};
 
-export function resetSite(siteSettings, extras) {
-  let siteAttrs = Object.assign(
-    {},
-    siteFixtures["site.json"].site,
-    extras || {}
-  );
-  siteAttrs.siteSettings = siteSettings;
-  PreloadStore.store("site", siteAttrs);
+export function resetSite(extras = {}) {
+  const siteAttrs = {
+    ...siteFixtures["site.json"].site,
+    ...extras,
+  };
+
+  PreloadStore.store("site", cloneJSON(siteAttrs));
   Site.resetCurrent();
 }
 
@@ -139,7 +160,7 @@ export function applyPretender(name, server, helper) {
 }
 
 // Add clean up code here to run after every test
-function testCleanup(container, app) {
+export function testCleanup(container, app) {
   if (_initialized.has(QUnit.config.current.testId)) {
     if (!app) {
       app = getApplication();
@@ -153,8 +174,6 @@ function testCleanup(container, app) {
     });
   }
 
-  flushMap();
-  localStorage.clear();
   User.resetCurrent();
   resetExtraClasses();
   clearOutletCache();
@@ -174,6 +193,7 @@ function testCleanup(container, app) {
   resetComposerCustomizations();
   resetQuickSearchRandomTips();
   resetPostMenuExtraButtons();
+  resetUserMenuProfileTabItems();
   clearExtraKeyboardShortcutHelp();
   clearNavItems();
   setTopicList(null);
@@ -184,16 +204,35 @@ function testCleanup(container, app) {
   clearTopicFooterDropdowns();
   clearTopicFooterButtons();
   clearDesktopNotificationHandlers();
+  cleanUpHashtagTypeClasses();
   resetLastEditNotificationClick();
   clearAuthMethods();
   setTestPresence(true);
-  if (!LEGACY_ENV) {
-    clearPresenceCallbacks();
-  }
+  clearPresenceCallbacks();
   restoreBaseUri();
   resetTopicsSectionLinks();
   clearTagDecorateCallbacks();
   clearBlockDecorateCallbacks();
+  clearTextDecorateCallbacks();
+  clearResolverOptions();
+  clearTagsHtmlCallbacks();
+  clearToolbarCallbacks();
+  resetNotificationTypeRenderers();
+  resetSidebarPanels();
+  clearExtraHeaderIcons();
+  resetOnKeyDownCallbacks();
+  resetUserMenuTabs();
+  resetLinkLookup();
+  resetModelTransformers();
+  resetMentions();
+  cleanupTemporaryModuleRegistrations();
+  cleanupCssGeneratorTags();
+  clearBulkButtons();
+}
+
+function cleanupCssGeneratorTags() {
+  document.querySelector("style#category-color-css-generator")?.remove();
+  document.querySelector("style#hashtag-css-generator")?.remove();
 }
 
 export function discourseModule(name, options) {
@@ -209,15 +248,11 @@ export function discourseModule(name, options) {
         this.registry = this.container.registry;
         this.owner = this.container;
         this.siteSettings = currentSettings();
-        clearResolverOptions();
       });
-      hooks.afterEach(() => testCleanup(this.container));
 
       this.getController = function (controllerName, properties) {
         let controller = this.container.lookup(`controller:${controllerName}`);
-        if (!LEGACY_ENV) {
-          controller.application = {};
-        }
+        controller.application = {};
         controller.siteSettings = this.siteSettings;
         if (properties) {
           controller.setProperties(properties);
@@ -227,6 +262,7 @@ export function discourseModule(name, options) {
 
       this.moduleName = name;
 
+      hooks.usingDiscourseModule = true;
       options.call(this, hooks);
     });
 
@@ -241,7 +277,6 @@ export function discourseModule(name, options) {
     },
     afterEach() {
       options?.afterEach?.call(this);
-      testCleanup(this.container);
     },
   });
 }
@@ -266,7 +301,11 @@ export function acceptance(name, optionsOrCallback) {
   } else if (typeof optionsOrCallback === "object") {
     deprecated(
       `${name}: The second parameter to \`acceptance\` should be a function that encloses your tests.`,
-      { since: "2.6.0", dropFrom: "2.9.0.beta1" }
+      {
+        since: "2.6.0",
+        dropFrom: "2.9.0.beta1",
+        id: "discourse.qunit.acceptance-function",
+      }
     );
     options = optionsOrCallback;
   }
@@ -293,25 +332,20 @@ export function acceptance(name, optionsOrCallback) {
         if (userChanges) {
           updateCurrentUser(userChanges);
         }
+
+        User.current().appEvents = getOwner(this).lookup("service:app-events");
+        User.current().trackStatus();
       }
 
       if (settingChanges) {
         mergeSettings(settingChanges);
       }
+
       this.siteSettings = currentSettings();
 
-      resetSite(currentSettings(), siteChanges);
+      resetSite(siteChanges);
 
-      if (LEGACY_ENV) {
-        getApplication().__registeredObjects__ = false;
-        getApplication().reset();
-      }
       this.container = getOwner(this);
-      if (LEGACY_ENV && loggedIn) {
-        updateCurrentUser({
-          appEvents: this.container.lookup("service:app-events"),
-        });
-      }
 
       if (!this.owner) {
         this.owner = this.container;
@@ -326,12 +360,10 @@ export function acceptance(name, optionsOrCallback) {
       resetMobile();
       let app = getApplication();
       options?.afterEach?.call(this);
-      testCleanup(this.container, app);
-
-      if (LEGACY_ENV) {
-        app.__registeredObjects__ = false;
-        app.reset();
+      if (loggedIn) {
+        User.current().stopTrackingStatus();
       }
+      testCleanup(this.container, app);
 
       // We do this after reset so that the willClearRender will have already fired
       resetWidgetCleanCallbacks();
@@ -378,18 +410,7 @@ export function acceptance(name, optionsOrCallback) {
       hooks.afterEach(setup.afterEach);
       callback(needs);
 
-      if (!LEGACY_ENV && getContext) {
-        setupApplicationTest(hooks);
-
-        hooks.beforeEach(function () {
-          // This hack seems necessary to allow `DiscourseURL` to use the testing router
-          let ctx = getContext();
-          this.container.registry.unregister("router:main");
-          this.container.registry.register("router:main", ctx.owner.router, {
-            instantiate: false,
-          });
-        });
-      }
+      setupApplicationTest(hooks);
     });
   } else {
     // Old way
@@ -398,6 +419,14 @@ export function acceptance(name, optionsOrCallback) {
 }
 
 export function controllerFor(controller, model) {
+  deprecated(
+    'controllerFor is deprecated. Use the standard `getOwner(this).lookup("controller:NAME")` instead',
+    {
+      id: "controller-for",
+      since: "3.0.0.beta14",
+    }
+  );
+
   controller = getOwner(this).lookup("controller:" + controller);
   if (model) {
     controller.set("model", model);
@@ -413,9 +442,10 @@ export function fixture(selector) {
 }
 
 QUnit.assert.not = function (actual, message) {
-  deprecated("assert.not() is deprecated. Use assert.notOk() instead.", {
+  deprecated("assert.not() is deprecated. Use assert.false() instead.", {
     since: "2.9.0.beta1",
     dropFrom: "2.10.0.beta1",
+    id: "discourse.qunit.assert-not",
   });
 
   this.pushResult({
@@ -451,15 +481,11 @@ QUnit.assert.containsInstance = function (collection, klass, message) {
 };
 
 export async function selectDate(selector, date) {
-  return new Promise((resolve) => {
-    const elem = document.querySelector(selector);
-    elem.value = date;
-    const evt = new Event("input", { bubbles: true, cancelable: false });
-    elem.dispatchEvent(evt);
-    elem.blur();
-
-    resolve();
-  });
+  const elem = document.querySelector(selector);
+  elem.value = date;
+  const evt = new Event("input", { bubbles: true, cancelable: false });
+  elem.dispatchEvent(evt);
+  elem.blur();
 }
 
 export function queryAll(selector, context) {
@@ -492,11 +518,15 @@ export function exists(selector) {
   return count(selector) > 0;
 }
 
-export function publishToMessageBus(channelPath, ...args) {
+export async function publishToMessageBus(channelPath, ...args) {
   args = cloneJSON(args);
-  MessageBus.callbacks
+
+  const promises = MessageBus.callbacks
     .filterBy("channel", channelPath)
-    .forEach((c) => c.func(...args));
+    .map((callback) => callback.func(...args));
+
+  await Promise.allSettled(promises);
+  await settled();
 }
 
 export async function selectText(selector, endOffset = null) {
@@ -521,25 +551,7 @@ export async function selectText(selector, endOffset = null) {
     selection.addRange(range);
   };
 
-  if (LEGACY_ENV) {
-    // In the Ember CLI environment, the settled() helper seems to take care of waiting
-    // for this event to fire. In legacy, we need to do it manually.
-    let callback;
-    const selectEventFiredPromise = new Promise((resolve) => {
-      callback = resolve;
-      document.addEventListener("selectionchange", callback);
-    });
-
-    performSelection();
-
-    try {
-      await selectEventFiredPromise;
-    } finally {
-      document.removeEventListener("selectionchange", callback);
-    }
-  } else {
-    performSelection();
-  }
+  performSelection();
 
   await settled();
 }
@@ -579,6 +591,17 @@ export async function paste(element, text, otherClipboardData = {}) {
   return e;
 }
 
+export async function emulateAutocomplete(inputSelector, text) {
+  await triggerKeyEvent(inputSelector, "keydown", "Backspace");
+  await fillIn(inputSelector, `${text} `);
+  await triggerKeyEvent(inputSelector, "keyup", "Backspace");
+
+  await triggerKeyEvent(inputSelector, "keydown", "Backspace");
+  await fillIn(inputSelector, text);
+  await triggerKeyEvent(inputSelector, "keyup", "Backspace");
+  await settled();
+}
+
 // The order of attributes can vary in different browsers. When comparing
 // HTML strings from the DOM, this function helps to normalize them to make
 // comparison work cross-browser
@@ -587,3 +610,5 @@ export function normalizeHtml(html) {
   resultElement.innerHTML = html;
   return resultElement.innerHTML;
 }
+
+export const metaModifier = { [`${PLATFORM_KEY_MODIFIER}Key`]: true };

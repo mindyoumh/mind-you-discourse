@@ -4,12 +4,10 @@ import Category from "discourse/models/category";
 import SelectKitRowComponent from "select-kit/components/select-kit/select-kit-row";
 import { categoryBadgeHTML } from "discourse/helpers/category-link";
 import { computed } from "@ember/object";
-import layout from "select-kit/templates/components/category-row";
 import { setting } from "discourse/lib/computed";
 import { htmlSafe } from "@ember/template";
 
 export default SelectKitRowComponent.extend({
-  layout,
   classNames: ["category-row"],
   hideParentCategory: bool("selectKit.options.hideParentCategory"),
   allowUncategorized: bool("selectKit.options.allowUncategorized"),
@@ -40,9 +38,9 @@ export default SelectKitRowComponent.extend({
 
   category: computed("rowValue", "rowName", function () {
     if (isEmpty(this.rowValue)) {
-      const uncat = Category.findUncategorized();
-      if (uncat && uncat.name === this.rowName) {
-        return uncat;
+      const uncategorized = Category.findUncategorized();
+      if (uncategorized && uncategorized.name === this.rowName) {
+        return uncategorized;
       }
     } else {
       return Category.findById(parseInt(this.rowValue, 10));

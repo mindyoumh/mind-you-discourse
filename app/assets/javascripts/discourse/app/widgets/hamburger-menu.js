@@ -5,7 +5,7 @@ import { NotificationLevels } from "discourse/lib/notification-levels";
 import { ajax } from "discourse/lib/ajax";
 import getURL from "discourse-common/lib/get-url";
 import { h } from "virtual-dom";
-import { later } from "@ember/runloop";
+import discourseLater from "discourse-common/lib/later";
 import { wantsNewWindow } from "discourse/lib/intercept-click";
 
 const flatten = (array) => [].concat.apply([], array);
@@ -95,7 +95,7 @@ export default createWidget("hamburger-menu", {
   },
 
   lookupCount(type) {
-    const tts = this.register.lookup("topic-tracking-state:main");
+    const tts = this.register.lookup("service:topic-tracking-state");
     return tts ? tts.lookupCount({ type }) : 0;
   },
 
@@ -198,12 +198,12 @@ export default createWidget("hamburger-menu", {
         .filter((c) => c.notification_level !== NotificationLevels.MUTED);
 
       categories = allCategories
-        .filter((c) => c.get("newTopics") > 0 || c.get("unreadTopics") > 0)
+        .filter((c) => c.newTopicsCount > 0 || c.unreadTopicsCount > 0)
         .sort((a, b) => {
           return (
-            b.get("newTopics") +
-            b.get("unreadTopics") -
-            (a.get("newTopics") + a.get("unreadTopics"))
+            b.newTopicsCount +
+            b.unreadTopicsCount -
+            (a.unreadTopicsCount + a.newTopicsCount)
           );
         });
 
@@ -354,11 +354,7 @@ export default createWidget("hamburger-menu", {
       });
   },
 
-  html(attrs, state) {
-    if (!state.loaded) {
-      this.refreshReviewableCount(state);
-    }
-
+  html() {
     return this.attach("menu-panel", {
       contents: () => this.panelContents(),
       maxWidth: this.settings.maxWidth,
@@ -385,7 +381,7 @@ export default createWidget("hamburger-menu", {
       const headerCloak = document.querySelector(".header-cloak");
       headerCloak.classList.add("animate");
       headerCloak.style.setProperty("--opacity", 0);
-      later(() => this.sendWidgetAction("toggleHamburger"), 200);
+      discourseLater(() => this.sendWidgetAction("toggleHamburger"), 200);
     }
   },
 
@@ -394,6 +390,14 @@ export default createWidget("hamburger-menu", {
       this.clickOutsideMobile(e);
     } else {
       this.sendWidgetAction("toggleHamburger");
+    }
+  },
+
+  keyDown(e) {
+    if (e.key === "Escape") {
+      this.sendWidgetAction("toggleHamburger");
+      e.preventDefault();
+      return false;
     }
   },
 });

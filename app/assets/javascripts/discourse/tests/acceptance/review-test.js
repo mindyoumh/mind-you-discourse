@@ -2,9 +2,10 @@ import {
   acceptance,
   count,
   exists,
+  loggedInUser,
   publishToMessageBus,
   query,
-  queryAll,
+  visible,
 } from "discourse/tests/helpers/qunit-helpers";
 import { click, fillIn, visit } from "@ember/test-helpers";
 import I18n from "I18n";
@@ -67,10 +68,11 @@ acceptance("Review", function (needs) {
     await reviewableActionDropdown.expand();
     await reviewableActionDropdown.selectRowByValue("reject_user_delete");
 
+    assert.ok(visible(".reject-reason-reviewable-modal"));
     assert.ok(
-      queryAll(".reject-reason-reviewable-modal:visible .title")
-        .html()
-        .includes(I18n.t("review.reject_reason.title")),
+      query(".reject-reason-reviewable-modal .title").innerHTML.includes(
+        I18n.t("review.reject_reason.title")
+      ),
       "it opens reject reason modal when user is rejected"
     );
 
@@ -78,10 +80,11 @@ acceptance("Review", function (needs) {
     await reviewableActionDropdown.expand();
     await reviewableActionDropdown.selectRowByValue("reject_user_block");
 
+    assert.ok(visible(".reject-reason-reviewable-modal"));
     assert.ok(
-      queryAll(".reject-reason-reviewable-modal:visible .title")
-        .html()
-        .includes(I18n.t("review.reject_reason.title")),
+      query(".reject-reason-reviewable-modal .title").innerHTML.includes(
+        I18n.t("review.reject_reason.title")
+      ),
       "it opens reject reason modal when user is rejected and blocked"
     );
   });
@@ -110,7 +113,7 @@ acceptance("Review", function (needs) {
     );
 
     assert.strictEqual(
-      queryAll(".reviewable-flagged-post .post-body").html().trim(),
+      query(".reviewable-flagged-post .post-body").innerHTML.trim(),
       "<b>cooked content</b>"
     );
 
@@ -131,29 +134,35 @@ acceptance("Review", function (needs) {
 
   test("Editing a reviewable", async function (assert) {
     const topic = '.reviewable-item[data-reviewable-id="4321"]';
+
     await visit("/review");
+
     assert.ok(exists(`${topic} .reviewable-action.approve`));
     assert.ok(!exists(`${topic} .category-name`));
+
     assert.strictEqual(
-      queryAll(`${topic} .discourse-tag:nth-of-type(1)`).text(),
+      query(`${topic} .discourse-tag:nth-of-type(1)`).innerText,
       "hello"
     );
+
     assert.strictEqual(
-      queryAll(`${topic} .discourse-tag:nth-of-type(2)`).text(),
+      query(`${topic} .discourse-tag:nth-of-type(2)`).innerText,
       "world"
     );
 
     assert.strictEqual(
-      queryAll(`${topic} .post-body`).text().trim(),
+      query(`${topic} .post-body`).innerText.trim(),
       "existing body"
     );
 
     await click(`${topic} .reviewable-action.edit`);
     await click(`${topic} .reviewable-action.save-edit`);
+
     assert.ok(
       exists(`${topic} .reviewable-action.approve`),
       "saving without changes is a cancel"
     );
+
     await click(`${topic} .reviewable-action.edit`);
 
     assert.ok(
@@ -163,16 +172,24 @@ acceptance("Review", function (needs) {
 
     await fillIn(".editable-field.payload-raw textarea", "new raw contents");
     await click(`${topic} .reviewable-action.cancel-edit`);
+
     assert.strictEqual(
-      queryAll(`${topic} .post-body`).text().trim(),
+      query(`${topic} .post-body`).innerText.trim(),
       "existing body",
       "cancelling does not update the value"
     );
 
     await click(`${topic} .reviewable-action.edit`);
     let category = selectKit(`${topic} .category-id .select-kit`);
+
     await category.expand();
     await category.selectRowByValue("6");
+
+    assert.strictEqual(
+      category.header().name(),
+      "support",
+      "displays the right header"
+    );
 
     let tags = selectKit(`${topic} .payload-tags .mini-tag-chooser`);
     requests = [];
@@ -186,24 +203,24 @@ acceptance("Review", function (needs) {
     await click(`${topic} .reviewable-action.save-edit`);
 
     assert.strictEqual(
-      queryAll(`${topic} .discourse-tag:nth-of-type(1)`).text(),
+      query(`${topic} .discourse-tag:nth-of-type(1)`).innerText,
       "hello"
     );
     assert.strictEqual(
-      queryAll(`${topic} .discourse-tag:nth-of-type(2)`).text(),
+      query(`${topic} .discourse-tag:nth-of-type(2)`).innerText,
       "world"
     );
     assert.strictEqual(
-      queryAll(`${topic} .discourse-tag:nth-of-type(3)`).text(),
+      query(`${topic} .discourse-tag:nth-of-type(3)`).innerText,
       "monkey"
     );
 
     assert.strictEqual(
-      queryAll(`${topic} .post-body`).text().trim(),
+      query(`${topic} .post-body`).innerText.trim(),
       "new raw contents"
     );
     assert.strictEqual(
-      queryAll(`${topic} .category-name`).text().trim(),
+      query(`${topic} .category-name`).innerText.trim(),
       "support"
     );
   });
@@ -219,14 +236,12 @@ acceptance("Review", function (needs) {
     );
     assert.ok(!exists(".stale-help"));
 
-    publishToMessageBus("/reviewable_counts", {
+    await publishToMessageBus(`/reviewable_counts/${loggedInUser().id}`, {
       review_count: 1,
       updates: {
         1234: { last_performing_username: "foo", status: 1 },
       },
     });
-
-    await visit("/review"); // wait for re-render
 
     assert.ok(reviewable.className.includes("reviewable-stale"));
     assert.strictEqual(count("[data-reviewable-id=1234] .status .approved"), 1);

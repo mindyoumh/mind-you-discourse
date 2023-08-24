@@ -1,3 +1,5 @@
+import deprecated from "discourse-common/lib/deprecated";
+
 export const INPUT_DELAY = 250;
 
 let environment = "unknown";
@@ -11,15 +13,16 @@ export function setEnvironment(e) {
 }
 
 export function isTesting() {
-  // eslint-disable-next-line no-undef
-  return Ember.testing || environment === "testing";
+  return environment === "testing";
 }
 
 // Generally means "before we migrated to Ember CLI"
-// eslint-disable-next-line no-undef
-let _isLegacy = Ember.VERSION.startsWith("3.12");
 export function isLegacyEmber() {
-  return _isLegacy;
+  deprecated("`isLegacyEmber()` is now deprecated and always returns false", {
+    id: "discourse.is-legacy-ember",
+    dropFrom: "3.0.0.beta1",
+  });
+  return false;
 }
 
 export function isDevelopment() {

@@ -90,6 +90,19 @@ module("Unit | Utility | url", function () {
     );
   });
 
+  test("routeTo does not rewrite routes started with /my", async function (assert) {
+    logIn();
+    sinon.stub(DiscourseURL, "router").get(() => {
+      return { currentURL: "/" };
+    });
+    sinon.stub(DiscourseURL, "handleURL");
+    DiscourseURL.routeTo("/myfeed");
+    assert.ok(
+      DiscourseURL.handleURL.calledWith(`/myfeed`),
+      "it should navigate to the unmodified route"
+    );
+  });
+
   test("prefixProtocol", async function (assert) {
     assert.strictEqual(
       prefixProtocol("mailto:mr-beaver@aol.com"),
@@ -139,18 +152,30 @@ module("Unit | Utility | url", function () {
         { path: "/c/foo/1", default_list_filter: "none" },
         false
       ),
-      "/c/foo/1"
+      "/c/foo/1/none"
     );
   });
 
-  test("routeTo redirects secure media URLS because they are server side only", async function (assert) {
+  test("routeTo redirects secure uploads URLS because they are server side only", async function (assert) {
     sinon.stub(DiscourseURL, "redirectTo");
     sinon.stub(DiscourseURL, "handleURL");
-    DiscourseURL.routeTo("/secure-media-uploads/original/1X/test.pdf");
+    DiscourseURL.routeTo("/secure-uploads/original/1X/test.pdf");
     assert.ok(
-      DiscourseURL.redirectTo.calledWith(
-        "/secure-media-uploads/original/1X/test.pdf"
-      )
+      DiscourseURL.redirectTo.calledWith("/secure-uploads/original/1X/test.pdf")
+    );
+  });
+
+  test("anchor handling", async function (assert) {
+    sinon.stub(DiscourseURL, "jumpToElement");
+    sinon.stub(DiscourseURL, "replaceState");
+    DiscourseURL.routeTo("#heading1");
+    assert.ok(
+      DiscourseURL.jumpToElement.calledWith("heading1"),
+      "in-page anchors call jumpToElement"
+    );
+    assert.ok(
+      DiscourseURL.replaceState.calledWith("#heading1"),
+      "in-page anchors call replaceState with the url fragment"
     );
   });
 });

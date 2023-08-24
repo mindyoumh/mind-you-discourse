@@ -8,11 +8,13 @@ import Bookmark from "discourse/models/bookmark";
 import I18n from "I18n";
 import { Promise } from "rsvp";
 import { htmlSafe } from "@ember/template";
+import { inject as service } from "@ember/service";
 
 export default Controller.extend({
   queryParams: ["q"],
   q: null,
 
+  router: service(),
   application: controller(),
   user: controller(),
   loading: false,
@@ -51,7 +53,7 @@ export default Controller.extend({
 
   @action
   search() {
-    this.transitionToRoute({
+    this.router.transitionTo({
       queryParams: { q: this.searchTerm },
     });
   },
@@ -96,6 +98,7 @@ export default Controller.extend({
 
   _processLoadResponse(searchTerm, response) {
     if (!response || !response.user_bookmark_list) {
+      this.model.loadMoreUrl = null;
       return;
     }
 

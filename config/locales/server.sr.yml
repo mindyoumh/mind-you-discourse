@@ -17,7 +17,7 @@ sr:
       no_day: "%Y %B"
   date:
     month_names:
-    - null
+    -
     - januar
     - februar
     - mart
@@ -142,6 +142,7 @@ sr:
               common: "je jedna od 10000 najčešće korišćenih lozinki. Molimo Vas izaberite sigurniju lozinku."
               same_as_username: "je ista kao vaše korisničko ime. Molimo Vas izaberite sigurniju šifru."
       <<: *errors
+  general_category_name: "Opšti"
   staff_category_name: "Osoblje"
   trust_levels:
     admin: "Admin"
@@ -214,7 +215,6 @@ sr:
         few: "pre %{count} mesec dana"
         other: "pre %{count} mesec dana"
   password_reset:
-    save: "Postavi Šifru"
     title: "Resetujte Šifru"
   change_email:
     max_secondary_emails_error: "Dosegli ste maksimalni dozvoljeni broj sekundarne e-pošte."
@@ -251,6 +251,7 @@ sr:
         count: Broj
     post_edits:
       labels:
+        post: Post
         editor: Urednik
         edit_reason: Razlog
     user_flagging_ratio:
@@ -264,8 +265,12 @@ sr:
         flag: Tip
     consolidated_page_views:
       labels:
+        post: Post
         editor: Urednik
         edit_reason: Razlog
+    consolidated_api_requests:
+      xaxis:
+        api: "API"
     topics:
       title: "Teme"
     posts:
@@ -376,7 +381,6 @@ sr:
     warn_reviving_old_topic_age: "Kada neko krene da odgovara na temu u kojoj je poslednji odgovor stariji od ovoliko dana, biće prikazano upozorenje. Onemogućite postavljanjem vrednosti 0. "
     autohighlight_all_code: "Forsiraj primenu označavanja koda za sve preformatirane blokove koda i kada nije eksplicitno naveden jezik."
     embed_username_required: "Korisničko ime je obavezno za kreiranje teme."
-    show_create_topics_notice: "Ako sajt ima manje od 5 javnih tema, prikaži poruku koja sugeriše administratorima da kreiraju neke teme."
     delete_drafts_older_than_n_days: "Izbriši radne verzije poruka starije od (n) dana"
     enable_emoji: "Omogući emotikone"
     emoji_set: "Koliko bi ste želeli vas emoji?"
@@ -418,7 +422,6 @@ sr:
   page_not_found:
     see_more: "Više"
     search_button: "Pretraži"
-  image: "slika"
   color_schemes:
     default_theme_name: "zadato"
   csv_export:
@@ -480,36 +483,14 @@ sr:
       name: Čitač
   wizard:
     step:
-      locale:
-        title: "Dobrodošli na vaš Discourse"
-        fields:
-          default_locale:
-            description: "Koji je podrazumevani jezik vaše zajednice?"
-      forum_title:
-        title: "Ime foruma"
-        description: "Naziv foruma je <i>prva</i> stvar koju će posetioci primetiti. Šta vaše ime govori o vašoj zajednici?"
+      introduction:
         fields:
           title:
-            label: "Ime vaše zajednice"
             placeholder: "Milenino mesto za bleju"
           site_description:
             placeholder: "Mesto gde Milena i njene prijateljice ćaskaju o kul stvarima"
-      introduction:
-        title: "Uvod"
-        fields:
-          welcome:
-            label: "Tema dobrodošlice"
-            description: "<p>Kako biste najbolje opisali vašu zajednicu totalnom strancu u liftu u 1 minuti?</p> <ul> <li>Za koga su ove diskusije?</li> <li>Šta ovde mogu da pronađem?</li> <li>Zašto bih ovo posećivao?</li> </ul> <p>Vaša tema dobrodošlice je prvo što će novi posetioci pročitati. Posmatrajte je to kao <b>vašu misiju</b> u jednom paragrafu. </p>"
-            one_paragraph: "Molimo da vaša poruka dobrodošlice ne bude duža od jednog paragrafa."
-      contact:
-        fields:
-          contact_email:
-            placeholder: "ime@primer.com"
-      corporate:
-        title: "Organizacija"
       finished:
         title: "Vaš Discource je spreman!"
-  joined: "Pridružen"
   reviewables:
     priorities:
       medium: "Srednje"
@@ -518,15 +499,16 @@ sr:
       medium: "Srednje"
       high: "Visoko"
     actions:
-      agree_and_suspend:
-        title: "Suspenduj Korisnika"
+      agree:
+        title: "Da"
       delete_single:
         title: "Obriši"
       disagree:
-        title: "Odbaci"
+        title: "Ne"
       approve:
         title: "Odobri"
       reject_user:
+        title: "Obriši Korisnika..."
         delete:
           title: "Obriši Korisnika"
       reject:

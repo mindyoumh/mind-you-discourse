@@ -1,8 +1,10 @@
 import Component from "@ember/component";
-import FilterModeMixin from "discourse/mixins/filter-mode";
 import discourseComputed from "discourse-common/utils/decorators";
+import { filterTypeForMode } from "discourse/lib/filter-mode";
+import { dependentKeyCompat } from "@ember/object/compat";
+import { tracked } from "@glimmer/tracking";
 
-export default Component.extend(FilterModeMixin, {
+export default Component.extend({
   tagName: "li",
   classNameBindings: [
     "active",
@@ -13,9 +15,14 @@ export default Component.extend(FilterModeMixin, {
   ],
   attributeBindings: ["content.title:title"],
   hidden: false,
-  rerenderTriggers: ["content.count"],
   activeClass: "",
   hrefLink: null,
+  filterMode: tracked(),
+
+  @dependentKeyCompat
+  get filterType() {
+    return filterTypeForMode(this.filterMode);
+  },
 
   @discourseComputed("content.filterType", "filterType", "content.active")
   active(contentFilterType, filterType, active) {
@@ -42,13 +49,14 @@ export default Component.extend(FilterModeMixin, {
     const content = this.content;
 
     let href = content.get("href");
-    let queryParams = [];
+    let urlSearchParams = new URLSearchParams();
+    let addParamsEvenIfEmpty = false;
 
     // Include the category id if the option is present
     if (content.get("includeCategoryId")) {
       let categoryId = this.get("content.category.id");
       if (categoryId) {
-        queryParams.push(`category_id=${categoryId}`);
+        urlSearchParams.set("category_id", categoryId);
       }
     }
 
@@ -56,17 +64,25 @@ export default Component.extend(FilterModeMixin, {
     // If no query param is present, add an empty one to ensure a ? is
     // appended to the URL.
     if (content.currentRouteQueryParams) {
-      if (content.currentRouteQueryParams.filter && queryParams.length === 0) {
-        queryParams.push("");
+      if (content.currentRouteQueryParams.filter) {
+        addParamsEvenIfEmpty = true;
       }
 
       if (content.currentRouteQueryParams.f) {
-        queryParams.push(`f=${content.currentRouteQueryParams.f}`);
+        urlSearchParams.set("f", content.currentRouteQueryParams.f);
       }
     }
 
-    if (queryParams.length) {
-      href += `?${queryParams.join("&")}`;
+    if (
+      this.siteSettings.desktop_category_page_style ===
+      "categories_and_latest_topics_created_date"
+    ) {
+      urlSearchParams.set("order", "created");
+    }
+
+    const queryString = urlSearchParams.toString();
+    if (addParamsEvenIfEmpty || queryString) {
+      href += `?${queryString}`;
     }
     this.set("hrefLink", href);
 

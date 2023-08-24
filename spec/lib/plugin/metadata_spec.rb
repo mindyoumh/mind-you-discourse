@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-describe Plugin::Metadata do
-  context "parse" do
+RSpec.describe Plugin::Metadata do
+  describe "parse" do
     it "correctly parses plugin info" do
       metadata = Plugin::Metadata.parse <<TEXT
 # name: plugin-name
@@ -45,9 +45,7 @@ TEXT
     official("discourse-adplugin")
     official("discourse-akismet")
     official("discourse-cakeday")
-    official("Canned Replies")
     official("discourse-data-explorer")
     unofficial("babble")
   end
-
 end

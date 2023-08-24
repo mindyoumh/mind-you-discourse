@@ -26,11 +26,20 @@ module TopicTagsMixin
 
   def all_tags
     return @tags if defined?(@tags)
+
+    tags = topic.visible_tags(scope)
+
     # Calling method `pluck` or `order` along with `includes` causing N+1 queries
-    tags = (SiteSetting.tags_sort_alphabetically ? topic.tags.sort_by(&:name) : topic.tags.sort_by(&:topic_count).reverse)
-    if !scope.is_staff?
-      tags = tags.reject { |tag| scope.hidden_tag_names.include?(tag[:name]) }
-    end
+    tags =
+      (
+        if SiteSetting.tags_sort_alphabetically
+          tags.sort_by(&:name)
+        else
+          topic_count_column = Tag.topic_count_column(scope)
+          tags.sort_by { |tag| tag.public_send(topic_count_column) }.reverse
+        end
+      )
+
     @tags = tags
   end
 end

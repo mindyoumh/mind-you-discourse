@@ -1,18 +1,21 @@
 import DropdownSelectBox from "select-kit/components/dropdown-select-box";
+import { inject as service } from "@ember/service";
 import I18n from "I18n";
 import { computed } from "@ember/object";
 import { popupAjaxError } from "discourse/lib/ajax-error";
-import showModal from "discourse/lib/show-modal";
+import IgnoreDurationModal from "discourse/components/modal/ignore-duration-with-username";
 
 export default DropdownSelectBox.extend({
+  modal: service(),
+
   classNames: ["user-notifications", "user-notifications-dropdown"],
 
   selectKitOptions: {
-    headerIcon: "userNotificationicon",
+    headerIcon: "userNotificationIcon",
     showCaret: true,
   },
 
-  userNotificationicon: computed("mainCollection.[]", "value", function () {
+  userNotificationIcon: computed("mainCollection.[]", "value", function () {
     return (
       this.mainCollection &&
       this.mainCollection.find((row) => row.id === this.value).icon
@@ -55,8 +58,11 @@ export default DropdownSelectBox.extend({
     this.updateNotificationLevel({ level: "mute" }).catch(popupAjaxError);
   },
   changeToIgnored() {
-    showModal("ignore-duration", {
-      model: this.user,
+    this.modal.show(IgnoreDurationModal, {
+      model: {
+        ignoredUsername: this.user.username,
+        enableSelection: false,
+      },
     });
   },
 

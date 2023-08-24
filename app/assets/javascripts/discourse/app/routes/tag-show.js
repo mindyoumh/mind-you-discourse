@@ -9,7 +9,6 @@ import {
 import Category from "discourse/models/category";
 import Composer from "discourse/models/composer";
 import DiscourseRoute from "discourse/routes/discourse";
-import FilterModeMixin from "discourse/mixins/filter-mode";
 import I18n from "I18n";
 import PermissionType from "discourse/models/permission-type";
 import { escapeExpression } from "discourse/lib/utilities";
@@ -17,11 +16,16 @@ import { makeArray } from "discourse-common/lib/helpers";
 import { setTopicList } from "discourse/lib/topic-list-tracker";
 import showModal from "discourse/lib/show-modal";
 import { action } from "@ember/object";
+import PreloadStore from "discourse/lib/preload-store";
+import { inject as service } from "@ember/service";
 
 const NONE = "none";
 const ALL = "all";
 
-export default DiscourseRoute.extend(FilterModeMixin, {
+export default DiscourseRoute.extend({
+  composer: service(),
+  router: service(),
+  currentUser: service(),
   navMode: "latest",
 
   queryParams,
@@ -89,6 +93,20 @@ export default DiscourseRoute.extend(FilterModeMixin, {
       filter = `tag/${tagId}/l/${topicFilter}`;
     }
 
+    if (
+      this.noSubcategories === undefined &&
+      category?.default_list_filter === "none" &&
+      topicFilter === "latest"
+    ) {
+      // TODO: avoid throwing away preload data by redirecting on the server
+      PreloadStore.getAndRemove("topic_list");
+      return this.router.replaceWith(
+        "tags.showCategoryNone",
+        params.category_slug_path_with_id,
+        tagId
+      );
+    }
+
     const list = await findTopicList(
       this.store,
       this.topicTrackingState,
@@ -123,10 +141,7 @@ export default DiscourseRoute.extend(FilterModeMixin, {
   },
 
   setupController(controller, model) {
-    const noSubcategories =
-      this.noSubcategories === undefined
-        ? model.category?.default_list_filter === NONE
-        : this.noSubcategories;
+    const noSubcategories = this.noSubcategories;
 
     this.controllerFor("tag.show").setProperties({
       model: model.tag,
@@ -136,7 +151,21 @@ export default DiscourseRoute.extend(FilterModeMixin, {
       noSubcategories,
       loading: false,
     });
-    this.searchService.set("searchContext", model.tag.searchContext);
+
+    if (model.category || model.additionalTags) {
+      const tagIntersectionSearchContext = {
+        type: "tagIntersection",
+        tagId: model.tag.id,
+        tag: model.tag,
+        additionalTags: model.additionalTags || null,
+        categoryId: model.category?.id || null,
+        category: model.category || null,
+      };
+
+      this.searchService.searchContext = tagIntersectionSearchContext;
+    } else {
+      this.searchService.searchContext = model.tag.searchContext;
+    }
   },
 
   titleToken() {
@@ -174,7 +203,7 @@ export default DiscourseRoute.extend(FilterModeMixin, {
 
   deactivate() {
     this._super(...arguments);
-    this.searchService.set("searchContext", null);
+    this.searchService.searchContext = null;
   },
 
   @action
@@ -188,8 +217,7 @@ export default DiscourseRoute.extend(FilterModeMixin, {
       this.openTopicDraft();
     } else {
       const controller = this.controllerFor("tag.show");
-      const composerController = this.controllerFor("composer");
-      composerController
+      this.composer
         .open({
           categoryId: controller.category?.id,
           action: Composer.CREATE_TOPIC,
@@ -197,8 +225,8 @@ export default DiscourseRoute.extend(FilterModeMixin, {
         })
         .then(() => {
           // Pre-fill the tags input field
-          if (composerController.canEditTags && controller.tag?.id) {
-            const composerModel = this.controllerFor("composer").model;
+          if (this.composer.canEditTags && controller.tag?.id) {
+            const composerModel = this.composer.model;
             composerModel.set("tags", this._controllerTags(controller));
           }
         });
@@ -213,17 +241,18 @@ export default DiscourseRoute.extend(FilterModeMixin, {
 
   @action
   dismissRead(operationType) {
-    const controller = this.controllerFor("tags-show");
+    const controller = this.controllerFor("tag-show");
     let options = {
       tagName: controller.tag?.id,
     };
     const categoryId = controller.category?.id;
 
     if (categoryId) {
-      options = Object.assign({}, options, {
+      options = {
+        ...options,
         categoryId,
         includeSubcategories: !controller.noSubcategories,
-      });
+      };
     }
 
     controller.send("dismissRead", operationType, options);
@@ -232,12 +261,6 @@ export default DiscourseRoute.extend(FilterModeMixin, {
   @action
   resetParams(skipParams = []) {
     resetParams.call(this, skipParams);
-  },
-
-  @action
-  didTransition() {
-    this.controllerFor("tag.show")._showFooter();
-    return true;
   },
 
   _controllerTags(controller) {

@@ -1,11 +1,11 @@
 "use strict";
 
 module.exports = function (environment) {
-  let ENV = {
+  const ENV = {
     modulePrefix: "discourse",
     environment,
     rootURL: process.env.DISCOURSE_RELATIVE_URL_ROOT || "/",
-    locationType: "auto",
+    locationType: "history",
     historySupportMiddleware: false,
     EmberENV: {
       FEATURES: {
@@ -24,6 +24,14 @@ module.exports = function (environment) {
       // when it is created
     },
   };
+
+  if (process.env.EMBER_RAISE_ON_DEPRECATION === "1") {
+    ENV.EmberENV.RAISE_ON_DEPRECATION = true;
+  } else if (process.env.EMBER_RAISE_ON_DEPRECATION === "0") {
+    ENV.EmberENV.RAISE_ON_DEPRECATION = false;
+  } else {
+    // Default (normally false; true in core qunit runs)
+  }
 
   if (environment === "development") {
     // ENV.APP.LOG_RESOLVER = true;

@@ -107,11 +107,11 @@ acceptance("Tags", function (needs) {
   test("list the tags", async function (assert) {
     await visit("/tags");
 
-    assert.ok($("body.tags-page").length, "has the body class");
     assert.ok(
-      $('*[data-tag-name="eviltrout"]').length,
-      "shows the eviltrout tag"
+      document.body.classList.contains("tags-page"),
+      "has the body class"
     );
+    assert.ok(exists(`[data-tag-name="eviltrout"]`), "shows the eviltrout tag");
   });
 
   test("dismiss notifications", async function (assert) {
@@ -193,40 +193,33 @@ acceptance("Tags listed by group", function (needs) {
 
   test("list the tags in groups", async function (assert) {
     await visit("/tags");
+
     assert.strictEqual(
-      $(".tag-list").length,
+      count(".tag-list"),
       4,
       "shows separate lists for the 3 groups and the ungrouped tags"
     );
     assert.deepEqual(
-      $(".tag-list h3")
-        .toArray()
-        .map((i) => {
-          return $(i).text();
-        }),
+      [...queryAll(".tag-list h3")].map((el) => el.innerText),
       ["Ford Cars", "Honda Cars", "Makes", "Other Tags"],
       "shown in given order and with tags that are not in a group"
     );
     assert.deepEqual(
-      $(".tag-list:nth-of-type(1) .discourse-tag")
-        .toArray()
-        .map((i) => {
-          return $(i).text();
-        }),
+      [...queryAll(".tag-list:nth-of-type(1) .discourse-tag")].map(
+        (el) => el.innerText
+      ),
       ["focus", "Escort"],
       "shows the tags in default sort (by count)"
     );
     assert.deepEqual(
-      $(".tag-list:nth-of-type(1) .discourse-tag")
-        .toArray()
-        .map((i) => {
-          return $(i).attr("href");
-        }),
+      [...queryAll(".tag-list:nth-of-type(1) .discourse-tag")].map((el) =>
+        el.getAttribute("href")
+      ),
       ["/tag/focus", "/tag/escort"],
       "always uses lowercase URLs for mixed case tags"
     );
     assert.strictEqual(
-      $("a[data-tag-name='private']").attr("href"),
+      query(`a[data-tag-name="private"]`).getAttribute("href"),
       "/u/eviltrout/messages/tags/private",
       "links to private messages"
     );
@@ -291,6 +284,7 @@ acceptance("Tag info", function (needs) {
     [
       "/tags/c/faq/4/planters/l/latest.json",
       "/tags/c/feature/2/planters/l/latest.json",
+      "/tags/c/feature/2/planters/l/top.json",
       "/tags/c/feature/2/none/planters/l/latest.json",
     ].forEach((url) => {
       server.get(url, () => {
@@ -402,7 +396,7 @@ acceptance("Tag info", function (needs) {
     await click("#show-tag-info");
     assert.ok(exists(".tag-info .tag-name"), "show tag");
     assert.ok(
-      queryAll(".tag-info .tag-associations").text().indexOf("Gardening") >= 0,
+      query(".tag-info .tag-associations").innerText.includes("Gardening"),
       "show tag group names"
     );
     assert.strictEqual(
@@ -485,7 +479,7 @@ acceptance("Tag info", function (needs) {
     await visit("/tag/planters");
 
     await click(".category-breadcrumb .category-drop-header");
-    await click('.category-breadcrumb .category-row[data-name="faq"]');
+    await click(`.category-breadcrumb .category-row[data-name="faq"]`);
 
     assert.strictEqual(currentURL(), "/tags/c/faq/4/planters");
   });
@@ -494,14 +488,24 @@ acceptance("Tag info", function (needs) {
     await visit("/tag/planters");
 
     await click(".category-breadcrumb .category-drop-header");
-    await click('.category-breadcrumb .category-row[data-name="feature"]');
+    await click(`.category-breadcrumb .category-row[data-name="feature"]`);
     assert.strictEqual(currentURL(), "/tags/c/feature/2/planters");
 
     await click(".category-breadcrumb li:nth-of-type(2) .category-drop-header");
     await click(
-      '.category-breadcrumb li:nth-of-type(2) .category-row[data-value="no-categories"]'
+      `.category-breadcrumb li:nth-of-type(2) .category-row[data-value="no-categories"]`
     );
     assert.strictEqual(currentURL(), "/tags/c/feature/2/none/planters");
+  });
+
+  test("can visit show-category-latest routes", async function (assert) {
+    await visit("/tags/c/feature/2/planters");
+
+    await click(".nav-item_latest a[href]");
+    assert.strictEqual(currentURL(), "/tags/c/feature/2/planters/l/latest");
+
+    await click(".nav-item_top a[href]");
+    assert.strictEqual(currentURL(), "/tags/c/feature/2/planters/l/top");
   });
 
   test("admin can manage tags", async function (assert) {
@@ -538,7 +542,7 @@ acceptance("Tag info", function (needs) {
   test("composer will not set tags if user cannot create them", async function (assert) {
     await visit("/tag/planters");
     await click("#create-topic");
-    let composer = this.owner.lookup("controller:composer");
+    let composer = this.owner.lookup("service:composer");
     assert.strictEqual(composer.get("model").tags, undefined);
   });
 });
@@ -607,7 +611,7 @@ acceptance("Tag show - create topic", function (needs) {
   });
 
   test("composer will not set tags with all/none tags when creating topic", async function (assert) {
-    const composer = this.owner.lookup("controller:composer");
+    const composer = this.owner.lookup("service:composer");
 
     await visit("/tag/none");
     await click("#create-topic");
@@ -619,7 +623,7 @@ acceptance("Tag show - create topic", function (needs) {
   });
 
   test("composer will set tags from selected tag", async function (assert) {
-    const composer = this.owner.lookup("controller:composer");
+    const composer = this.owner.lookup("service:composer");
 
     await visit("/tag/planters");
     await click("#create-topic");

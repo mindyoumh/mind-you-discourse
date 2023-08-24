@@ -14,6 +14,7 @@ import {
   WidgetMouseOverHook,
   WidgetMouseUpHook,
   WidgetTouchEndHook,
+  WidgetTouchMoveHook,
   WidgetTouchStartHook,
 } from "discourse/widgets/hooks";
 import DecoratorHelper from "discourse/widgets/decorator-helper";
@@ -23,11 +24,18 @@ import { deepMerge } from "discourse-common/lib/object";
 import { get } from "@ember/object";
 import { h } from "virtual-dom";
 import { isProduction } from "discourse-common/config/environment";
+import { consolePrefix } from "discourse/lib/source-identifier";
+import { getOwner, setOwner } from "@ember/application";
+import { camelize } from "@ember/string";
 
 const _registry = {};
 
 export function queryRegistry(name) {
   return _registry[name];
+}
+
+export function deleteFromRegistry(name) {
+  return delete _registry[name];
 }
 
 const _decorators = {};
@@ -102,7 +110,10 @@ export function reopenWidget(name, opts) {
   let existing = _registry[name];
   if (!existing) {
     // eslint-disable-next-line no-console
-    console.error(`Could not find widget ${name} in registry`);
+    console.error(
+      consolePrefix(),
+      `reopenWidget: Could not find widget ${name} in registry`
+    );
     return;
   }
 
@@ -138,19 +149,20 @@ export default class Widget {
     this.dirtyKeys = opts.dirtyKeys;
 
     register.deprecateContainer(this);
+    setOwner(this, getOwner(register));
 
     this.key = this.buildKey ? this.buildKey(attrs) : null;
-    this.site = register.lookup("site:main");
-    this.siteSettings = register.lookup("site-settings:main");
-    this.currentUser = register.lookup("current-user:main");
-    this.capabilities = register.lookup("capabilities:main");
+    this.site = register.lookup("service:site");
+    this.siteSettings = register.lookup("service:site-settings");
+    this.currentUser = register.lookup("service:current-user");
+    this.capabilities = register.lookup("service:capabilities");
     this.store = register.lookup("service:store");
     this.appEvents = register.lookup("service:app-events");
-    this.keyValueStore = register.lookup("key-value-store:main");
+    this.keyValueStore = register.lookup("service:key-value-store");
 
     // We can inject services into widgets by passing a `services` parameter on creation
     (this.services || []).forEach((s) => {
-      this[s] = register.lookup(`service:${s}`);
+      this[camelize(s)] = register.lookup(`service:${s}`);
     });
 
     this.init(this.attrs);
@@ -416,9 +428,11 @@ export default class Widget {
     if (this.clickOutside) {
       properties["widget-click-outside"] = new WidgetClickOutsideHook(this);
     }
+
     if (this.click) {
       properties["widget-click"] = new WidgetClickHook(this);
     }
+
     if (this.doubleClick) {
       properties["widget-double-click"] = new WidgetDoubleClickHook(this);
     }
@@ -467,6 +481,10 @@ export default class Widget {
 
     if (this.touchEnd) {
       properties["widget-touch-end"] = new WidgetTouchEndHook(this);
+    }
+
+    if (this.touchMove) {
+      properties["widget-touch-move"] = new WidgetTouchMoveHook(this);
     }
 
     const attributes = properties["attributes"] || {};

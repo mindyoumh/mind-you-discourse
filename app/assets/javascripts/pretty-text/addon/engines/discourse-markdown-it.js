@@ -41,6 +41,7 @@ function createHelper(
     deprecated("`whiteList` has been replaced with `allowList`", {
       since: "2.6.0.beta.4",
       dropFrom: "2.7.0",
+      id: "discourse.markdown-it.whitelist",
     });
     helper.allowList(info);
   };
@@ -176,7 +177,8 @@ function audioHTML(token) {
   </audio>`;
 }
 
-const IMG_SIZE_REGEX = /^([1-9]+[0-9]*)x([1-9]+[0-9]*)(\s*,\s*(x?)([1-9][0-9]{0,2}?)([%x]?))?$/;
+const IMG_SIZE_REGEX =
+  /^([1-9]+[0-9]*)x([1-9]+[0-9]*)(\s*,\s*(x?)([1-9][0-9]{0,2}?)([%x]?))?$/;
 function renderImageOrPlayableMedia(tokens, idx, options, env, slf) {
   const token = tokens[idx];
   const alt = slf.renderInlineAsText(token.children, options, env);
@@ -252,7 +254,13 @@ function renderImageOrPlayableMedia(tokens, idx, options, env, slf) {
     }
   }
 
-  token.attrs[token.attrIndex("alt")][1] = altSplit.join("|");
+  const altValue = altSplit.join("|").trim();
+  if (altValue === "") {
+    token.attrSet("role", "presentation");
+  } else {
+    token.attrSet("alt", altValue);
+  }
+
   return slf.renderToken(tokens, idx, options);
 }
 
@@ -344,9 +352,9 @@ function buildCustomMarkdownCookFunction(engineOpts, defaultEngineOpts) {
 function createMarkdownItEngineWithOpts(markdownitOpts, ruleOverrides) {
   if (ruleOverrides !== undefined) {
     // Preset for "zero", https://github.com/markdown-it/markdown-it/blob/master/lib/presets/zero.js
-    return window.markdownit("zero", markdownitOpts).enable(ruleOverrides);
+    return globalThis.markdownit("zero", markdownitOpts).enable(ruleOverrides);
   }
-  return window.markdownit(markdownitOpts);
+  return globalThis.markdownit(markdownitOpts);
 }
 
 function overrideMarkdownFeatures(features, featureOverrides) {
@@ -378,6 +386,12 @@ function setupMarkdownEngine(opts, featureConfig) {
 
   opts.pluginCallbacks.forEach(([feature, callback]) => {
     if (featureConfig[feature]) {
+      if (callback === null || callback === undefined) {
+        // eslint-disable-next-line no-console
+        console.log("BAD MARKDOWN CALLBACK FOUND");
+        // eslint-disable-next-line no-console
+        console.log(`FEATURE IS: ${feature}`);
+      }
       opts.engine.use(callback);
     }
   });
@@ -409,6 +423,7 @@ function unhoistForCooked(hoisted, cooked) {
         found = true;
         return hoisted[key];
       });
+      delete hoisted[key];
     };
 
     while (found) {
@@ -524,7 +539,7 @@ export function setup(opts, siteSettings, state) {
   getOptions.f = () => opts.discourse;
 
   opts.discourse.limitedSiteSettings = {
-    secureMedia: siteSettings.secure_media,
+    secureUploads: siteSettings.secure_uploads,
     enableDiffhtmlPreview: siteSettings.enable_diffhtml_preview,
     traditionalMarkdownLinebreaks: siteSettings.traditional_markdown_linebreaks,
     enableMarkdownLinkify: siteSettings.enable_markdown_linkify,
@@ -562,14 +577,16 @@ export function setup(opts, siteSettings, state) {
 
 export function cook(raw, opts) {
   // we still have to hoist html_raw nodes so they bypass the allowlister
-  // this is the case for oneboxes
-  let hoisted = {};
-  opts.discourse.hoisted = hoisted;
+  // this is the case for oneboxes and also certain plugins that require
+  // raw HTML rendering within markdown bbcode rules
+  opts.discourse.hoisted ??= {};
 
   const rendered = opts.engine.render(raw);
   let cooked = opts.discourse.sanitizer(rendered).trim();
-  cooked = unhoistForCooked(hoisted, cooked);
-  delete opts.discourse.hoisted;
+
+  // opts.discourse.hoisted guid keys will be deleted within here to
+  // keep the object empty
+  cooked = unhoistForCooked(opts.discourse.hoisted, cooked);
 
   return cooked;
 }

@@ -6,9 +6,11 @@ const MSO_LIST_CLASSES = [
 
 let tagDecorateCallbacks = [];
 let blockDecorateCallbacks = [];
+let textDecorateCallbacks = [];
 
 /**
- * Allows to add support for custom inline markdown/bbcode
+ * Allows to add support for custom inline markdown/bbcode prefixes
+ * to convert nodes back to bbcode.
  *
  * ```
  * addTagDecorateCallback(function (text) {
@@ -29,7 +31,8 @@ export function clearTagDecorateCallbacks() {
 }
 
 /**
- * Allows to add support for custom block markdown/bbcode
+ * Allows to add support for custom block markdown/bbcode prefixes
+ * to convert nodes back to bbcode.
  *
  * ```
  * addBlockDecorateCallback(function (text) {
@@ -48,55 +51,35 @@ export function clearBlockDecorateCallbacks() {
   blockDecorateCallbacks = [];
 }
 
+/**
+ * Allows to add support for custom text node transformations
+ * based on the next/previous elements.
+ *
+ * ```
+ * addTextDecorateCallback(function (text, nextElement, previousElement) {
+ *   if (
+ *     startRangeOpts &&
+ *     nextElement?.attributes.class?.includes("discourse-local-date") &&
+ *     text === "→"
+ *   ) {
+ *     return "";
+ *   }
+ * });
+ * ```
+ */
+export function addTextDecorateCallback(callback) {
+  textDecorateCallbacks.push(callback);
+}
+
+export function clearTextDecorateCallbacks() {
+  textDecorateCallbacks = [];
+}
+
 export class Tag {
   static named(name) {
     const klass = class NamedTag extends Tag {};
     klass.tagName = name;
     return klass;
-  }
-
-  constructor(prefix = "", suffix = "", inline = false) {
-    this.prefix = prefix;
-    this.suffix = suffix;
-    this.inline = inline;
-  }
-
-  decorate(text) {
-    for (const callback of tagDecorateCallbacks) {
-      const result = callback.call(this, text);
-
-      if (typeof result !== "undefined") {
-        text = result;
-      }
-    }
-
-    if (this.prefix || this.suffix) {
-      text = [this.prefix, text, this.suffix].join("");
-    }
-
-    if (this.inline) {
-      const { prev, next } = this.element;
-
-      if (prev && prev.name !== "#text") {
-        text = " " + text;
-      }
-
-      if (next && next.name !== "#text") {
-        text = text + " ";
-      }
-    }
-
-    return text;
-  }
-
-  toMarkdown() {
-    const text = this.element.innerMarkdown();
-
-    if (text?.trim()) {
-      return this.decorate(text);
-    }
-
-    return text;
   }
 
   static blocks() {
@@ -332,6 +315,18 @@ export class Tag {
           return text;
         }
 
+        if (attr.class?.includes("hashtag-cooked")) {
+          if (attr["data-ref"]) {
+            return `#${attr["data-ref"]}`;
+          } else {
+            let type = "";
+            if (attr["data-type"]) {
+              type = `::${attr["data-type"]}`;
+            }
+            return `#${attr["data-slug"]}${type}`;
+          }
+        }
+
         let img;
         if (
           ["lightbox", "d-lazyload"].includes(attr.class) &&
@@ -384,6 +379,10 @@ export class Tag {
         }
 
         if (cssClass?.includes("emoji")) {
+          if (cssClass.includes("user-status")) {
+            return "";
+          }
+
           return attr.title || pAttr.title;
         }
 
@@ -616,6 +615,50 @@ export class Tag {
       }
     };
   }
+
+  constructor(prefix = "", suffix = "", inline = false) {
+    this.prefix = prefix;
+    this.suffix = suffix;
+    this.inline = inline;
+  }
+
+  decorate(text) {
+    for (const callback of tagDecorateCallbacks) {
+      const result = callback.call(this, text);
+
+      if (typeof result !== "undefined") {
+        text = result;
+      }
+    }
+
+    if (this.prefix || this.suffix) {
+      text = [this.prefix, text, this.suffix].join("");
+    }
+
+    if (this.inline) {
+      const { prev, next } = this.element;
+
+      if (prev && prev.name !== "#text") {
+        text = " " + text;
+      }
+
+      if (next && next.name !== "#text") {
+        text = text + " ";
+      }
+    }
+
+    return text;
+  }
+
+  toMarkdown() {
+    const text = this.element.innerMarkdown();
+
+    if (text?.trim()) {
+      return this.decorate(text);
+    }
+
+    return text;
+  }
 }
 
 let tagsMap;
@@ -657,9 +700,38 @@ function tagByName(name) {
 }
 
 class Element {
-  constructor(element, parent, previous, next) {
+  static toMarkdown(element, parent, prev, next, metadata) {
+    return new Element(element, parent, prev, next, metadata).toMarkdown();
+  }
+
+  static parseChildren(parent) {
+    return Element.parse(parent.children, parent);
+  }
+
+  static parse(elements, parent = null) {
+    if (elements) {
+      let result = [];
+      let metadata = {};
+
+      for (let i = 0; i < elements.length; i++) {
+        const prev = i === 0 ? null : elements[i - 1];
+        const next = i === elements.length ? null : elements[i + 1];
+
+        result.push(
+          Element.toMarkdown(elements[i], parent, prev, next, metadata)
+        );
+      }
+
+      return result.join("");
+    }
+
+    return "";
+  }
+
+  constructor(element, parent, previous, next, metadata) {
     this.name = element.name;
     this.data = element.data;
+    this.metadata = metadata;
     this.children = element.children;
     this.attributes = element.attributes;
 
@@ -682,6 +754,7 @@ class Element {
   tag() {
     const tag = new (tagByName(this.name) || Tag)();
     tag.element = this;
+    tag.metadata = this.metadata;
     return tag;
   }
 
@@ -709,6 +782,19 @@ class Element {
     }
 
     text = text.replace(/[\s\t]+/g, " ");
+    textDecorateCallbacks.forEach((callback) => {
+      const result = callback.call(
+        this,
+        text,
+        this.next,
+        this.previous,
+        this.metadata
+      );
+
+      if (typeof result !== "undefined") {
+        text = result;
+      }
+    });
 
     return text;
   }
@@ -719,31 +805,6 @@ class Element {
 
   filterParentNames(names) {
     return this.parentNames.filter((p) => names.includes(p));
-  }
-
-  static toMarkdown(element, parent, prev, next) {
-    return new Element(element, parent, prev, next).toMarkdown();
-  }
-
-  static parseChildren(parent) {
-    return Element.parse(parent.children, parent);
-  }
-
-  static parse(elements, parent = null) {
-    if (elements) {
-      let result = [];
-
-      for (let i = 0; i < elements.length; i++) {
-        const prev = i === 0 ? null : elements[i - 1];
-        const next = i === elements.length ? null : elements[i + 1];
-
-        result.push(Element.toMarkdown(elements[i], parent, prev, next));
-      }
-
-      return result.join("");
-    }
-
-    return "";
   }
 }
 

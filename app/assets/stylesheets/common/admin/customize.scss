@@ -23,13 +23,38 @@
   }
 }
 
+.settings-editor {
+  .ace-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+    .ace_editor {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+    }
+  }
+}
+
+.theme-settings-editor-dialog {
+  .dialog-footer {
+    display: none;
+  }
+}
+
 .admin-customize.admin-customize-themes {
   .admin-container {
     padding: 0;
   }
-  .error-message {
+  .error-message,
+  .raw-error {
     margin-top: 5px;
     margin-bottom: 5px;
+  }
+  .error-message {
     .fa {
       color: var(--danger);
     }
@@ -45,7 +70,7 @@
     margin-bottom: 10px;
     input {
       margin-bottom: 0;
-      font-size: $font-down-2;
+      font-size: var(--font-down-2);
       .ios-device & {
         font-size: var(--font-down-2);
       }
@@ -62,7 +87,7 @@
   }
 
   .field-warning {
-    background-color: var(--highlight-low);
+    background-color: var(--highlight-bg);
   }
 
   .admin-container {
@@ -83,7 +108,7 @@
     vertical-align: top;
 
     .title {
-      font-size: $font-up-4;
+      font-size: var(--font-up-4);
       font-weight: bold;
       margin-bottom: 0.25em;
       display: flex;
@@ -96,7 +121,7 @@
         margin-left: 0.5em;
       }
       a {
-        font-size: $font-down-2;
+        font-size: var(--font-down-2);
       }
     }
 
@@ -117,7 +142,7 @@
     }
 
     div.remote-url {
-      font-size: $font-down-1;
+      font-size: var(--font-down-1);
       margin-bottom: 7px;
     }
 
@@ -132,7 +157,7 @@
     }
 
     .mini-title {
-      font-size: $font-up-1;
+      font-size: var(--font-up-1);
       font-weight: bold;
       margin-bottom: 7px;
     }
@@ -186,8 +211,16 @@
       text-align: center;
 
       &.active {
-        font-weight: 700;
+        background-color: var(--quaternary);
+        color: var(--secondary);
+        .d-icon {
+          color: currentColor;
+        }
       }
+    }
+
+    .d-button-label {
+      @include ellipsis;
     }
   }
 
@@ -214,15 +247,24 @@
       border-bottom: 1px solid var(--primary-low);
       display: flex;
 
+      &.inactive-theme {
+        color: var(--primary-high);
+        background: var(--primary-very-low);
+        font-size: var(--font-down-1);
+        &:not(.selected):hover {
+          color: var(--primary);
+        }
+      }
+
       &.inactive-indicator {
         border-right: 0;
         border-left: 0;
-        font-weight: bold;
-        color: var(--primary-medium);
+        margin-top: 1em;
+        padding-left: 0.33em;
 
         span.empty {
-          padding-left: 5px;
-          padding-top: 15px;
+          padding-left: 0.33em;
+          padding-top: 1em;
         }
       }
       &:not(.inactive-indicator):not(.selected):hover {
@@ -258,8 +300,7 @@
       .info {
         overflow: hidden;
         display: flex;
-        font-weight: bold;
-        font-size: $font-up-1;
+        font-size: var(--font-up-1);
 
         .icons {
           margin-left: auto;
@@ -269,7 +310,7 @@
       .components-list {
         margin-top: 5px;
         display: inline-block;
-        font-size: $font-down-1;
+        font-size: var(--font-down-1);
         align-items: baseline;
         color: var(--primary-high);
 
@@ -363,7 +404,7 @@
   .editor-information {
     display: flex;
     align-items: center;
-    font-size: $font-up-1;
+    font-size: var(--font-up-1);
     margin-bottom: 0.5em;
 
     .editor-back-button {
@@ -496,8 +537,8 @@
 
     .ace_placeholder {
       font-family: inherit;
-      font-size: $font-up-1;
-      color: $primary-high;
+      font-size: var(--font-up-1);
+      color: var(--primary-high);
     }
 
     .status-actions {
@@ -567,8 +608,8 @@
     .description {
       margin: 0.15em 0 0;
       color: var(--primary-high);
-      font-size: $font-down-1;
-      line-height: $line-height-medium;
+      font-size: var(--font-down-1);
+      line-height: var(--line-height-medium);
     }
 
     .invalid .hex input {
@@ -580,7 +621,7 @@
 
   .status-message {
     display: block;
-    font-size: $font-down-1;
+    font-size: var(--font-down-1);
     margin-top: 8px;
   }
 
@@ -754,7 +795,7 @@ table.permalinks {
       }
       div.label {
         display: block;
-        font-size: $font-down-1;
+        font-size: var(--font-down-1);
         color: var(--primary-medium);
       }
       td.controls,
@@ -827,7 +868,6 @@ table.permalinks {
     border-bottom: 1px solid var(--primary-low);
     .form-display {
       width: 25%;
-      display: inline-block;
       float: left;
     }
     .form-element,
@@ -870,7 +910,7 @@ table.permalinks {
 
 .reseed-modal {
   .options-group-title {
-    font-size: $font-up-2;
+    font-size: var(--font-up-2);
     font-weight: bold;
     margin: 8px 0;
   }
@@ -882,7 +922,7 @@ table.permalinks {
 
 .robots-txt-edit {
   div.overridden {
-    background: var(--highlight-medium);
+    background: var(--highlight-bg);
     padding: 7px;
     margin-bottom: 7px;
   }
@@ -916,6 +956,97 @@ table.permalinks {
       right: 0;
       top: 0;
       bottom: 0;
+    }
+  }
+}
+
+.form-templates {
+  &__info {
+    margin-top: 1rem;
+  }
+
+  &__table {
+    margin-bottom: 1rem;
+
+    .admin-list-item .action {
+      text-align: right;
+    }
+  }
+
+  &__form {
+    input {
+      width: 300px;
+    }
+
+    .ace-wrapper {
+      position: relative;
+      height: calc(100vh - 450px);
+      min-height: 200px;
+      width: 100%;
+      box-shadow: var(--shadow-footer-nav);
+      border-radius: 4px;
+    }
+
+    .ace_editor {
+      border-radius: 4px;
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    .ace_placeholder {
+      font-family: inherit;
+      font-size: var(--font-up-1);
+      color: var(--primary-high);
+    }
+
+    .footer-buttons {
+      display: flex;
+      gap: 0.5rem;
+      .btn-danger {
+        margin-left: auto;
+      }
+    }
+  }
+
+  &__editor {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  &__quick-insert-field-buttons {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-left: 1rem;
+
+    span {
+      margin-right: 0.25rem;
+    }
+
+    .btn {
+      &:not(:last-of-type) {
+        border-right: 1px solid var(--primary-low);
+      }
+    }
+  }
+
+  &__validation-options td {
+    padding: 0.75rem;
+  }
+
+  &__preview-button {
+    margin-left: auto;
+  }
+}
+
+.customize-form-template-view-modal {
+  .modal-footer {
+    .btn:last-child {
+      margin-left: auto;
     }
   }
 }

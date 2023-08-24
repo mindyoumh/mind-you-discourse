@@ -1,46 +1,20 @@
 import Component from "@ember/component";
+import { BookmarkFormData } from "discourse/lib/bookmark";
+import BookmarkModal from "discourse/components/modal/bookmark";
 import { action } from "@ember/object";
-import { next, schedule } from "@ember/runloop";
-import bootbox from "bootbox";
-import { openBookmarkModal } from "discourse/controllers/bookmark";
 import { ajax } from "discourse/lib/ajax";
 import {
   openLinkInNewTab,
   shouldOpenInNewTab,
 } from "discourse/lib/click-track";
-import Scrolling from "discourse/mixins/scrolling";
 import I18n from "I18n";
 import { Promise } from "rsvp";
+import { inject as service } from "@ember/service";
 
-export default Component.extend(Scrolling, {
+export default Component.extend({
+  dialog: service(),
+  modal: service(),
   classNames: ["bookmark-list-wrapper"],
-
-  didInsertElement() {
-    this._super(...arguments);
-    this.bindScrolling();
-    this.scrollToLastPosition();
-  },
-
-  willDestroyElement() {
-    this._super(...arguments);
-    this.unbindScrolling();
-  },
-
-  scrollToLastPosition() {
-    const scrollTo = this.session.bookmarkListScrollPosition;
-    if (scrollTo >= 0) {
-      schedule("afterRender", () => {
-        if (this.element && !this.isDestroying && !this.isDestroyed) {
-          next(() => window.scrollTo(0, scrollTo + 1));
-        }
-      });
-    }
-  },
-
-  scrolled() {
-    this._super(...arguments);
-    this.session.set("bookmarkListScrollPosition", window.scrollY);
-  },
 
   @action
   removeBookmark(bookmark) {
@@ -64,39 +38,39 @@ export default Component.extend(Scrolling, {
       if (!bookmark.reminder_at) {
         return deleteBookmark();
       }
-      bootbox.confirm(I18n.t("bookmarks.confirm_delete"), (result) => {
-        if (result) {
-          deleteBookmark();
-        } else {
-          resolve(false);
-        }
+      this.dialog.deleteConfirm({
+        message: I18n.t("bookmarks.confirm_delete"),
+        didConfirm: () => deleteBookmark(),
+        didCancel: () => resolve(false),
       });
     });
   },
 
   @action
   screenExcerptForExternalLink(event) {
-    if (event.target && event.target.tagName === "A") {
-      let link = event.target;
-      if (shouldOpenInNewTab(link.href)) {
-        openLinkInNewTab(link);
+    if (event?.target?.tagName === "A") {
+      if (shouldOpenInNewTab(event.target.href)) {
+        openLinkInNewTab(event, event.target);
       }
     }
   },
 
   @action
   editBookmark(bookmark) {
-    openBookmarkModal(bookmark, {
-      onAfterSave: (savedData) => {
-        this.appEvents.trigger(
-          "bookmarks:changed",
-          savedData,
-          bookmark.attachedTo()
-        );
-        this.reload();
-      },
-      onAfterDelete: () => {
-        this.reload();
+    this.modal.show(BookmarkModal, {
+      model: {
+        bookmark: new BookmarkFormData(bookmark),
+        afterSave: (savedData) => {
+          this.appEvents.trigger(
+            "bookmarks:changed",
+            savedData,
+            bookmark.attachedTo()
+          );
+          this.reload();
+        },
+        afterDelete: () => {
+          this.reload();
+        },
       },
     });
   },

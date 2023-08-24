@@ -5,13 +5,17 @@
 
 // Animation Keyframes
 @keyframes ping {
-  from {
-    transform: scale(0.25);
-    opacity: 1;
+  0% {
+    transform: scale(0.6);
+    box-shadow: 0 0 0 0 rgba(var(--success-rgb), 0.7);
   }
-  to {
-    transform: scale(2);
-    opacity: 0;
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(var(--success-rgb), 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(var(--success-rgb), 0);
   }
 }
 
@@ -67,16 +71,17 @@ body {
   background-attachment: fixed;
   background-size: cover;
   min-height: 100%;
+  box-sizing: border-box;
 
   @include clearfix;
 }
 
 // setting a static limit on big and small prevents nesting abuse
 big {
-  font-size: $font-up-5;
+  font-size: var(--font-up-5);
 }
 small {
-  font-size: $font-down-2;
+  font-size: var(--font-down-2);
 }
 
 blockquote {
@@ -90,7 +95,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: $heading-font-family;
+  font-family: var(--heading-font-family);
   margin-top: 0;
   margin-bottom: 0.5rem;
 }
@@ -145,7 +150,7 @@ input {
     margin-top: 0.17em;
     margin-right: 0.43em;
     margin-left: 0.1em;
-    line-height: $line-height-small;
+    line-height: var(--line-height-small);
     cursor: pointer;
     flex-shrink: 0; // Adding for safety, Safari will shrink checkboxes
   }
@@ -193,7 +198,7 @@ textarea {
 
   &:focus:required:invalid:focus {
     border-color: var(--danger);
-    box-shadow: shadow("focus-danger");
+    box-shadow: var(--shadow-focus-danger);
   }
 }
 
@@ -219,7 +224,7 @@ input {
     color: var(--primary);
     background-color: var(--secondary);
     border: 1px solid var(--primary-medium);
-    border-radius: 0;
+    border-radius: var(--d-input-border-radius);
     &:focus {
       @include default-focus;
     }
@@ -287,7 +292,6 @@ table {
 
 .sortable {
   white-space: nowrap;
-  cursor: pointer;
   .discourse-no-touch & {
     &:hover,
     &:focus {
@@ -298,6 +302,7 @@ table {
     margin-left: 0.25em;
   }
   @include unselectable;
+  cursor: pointer;
 }
 
 .radio,
@@ -327,11 +332,10 @@ table {
 }
 
 .wrap {
-  @extend .clearfix;
+  max-width: var(--d-max-width);
   margin-right: auto;
   margin-left: auto;
   padding: 0 10px;
-
   .contents {
     position: relative;
   }
@@ -345,20 +349,6 @@ table {
 
 .full-width {
   margin-left: 12px;
-}
-
-.top-space {
-  margin-top: 10px;
-}
-
-.message {
-  border-radius: 8px;
-  background-color: var(--secondary);
-  padding: 14px;
-
-  h2 {
-    margin-bottom: 20px;
-  }
 }
 
 .clear-transitions {
@@ -379,15 +369,6 @@ table {
   background-color: var(--secondary);
   display: inline-block;
   border-radius: 50%;
-}
-
-.profiler-results.profiler-left {
-  top: var(--header-offset) !important;
-}
-
-.flex-center-align {
-  display: flex;
-  align-items: center;
 }
 
 .unread-high-priority-notifications {
@@ -437,7 +418,7 @@ table {
   justify-content: center;
   width: 1.25em;
   height: 1.25em;
-  background-color: var(--tertiary-low);
+  background-color: var(--secondary);
   border-radius: 50%;
 
   .emoji {
@@ -445,6 +426,14 @@ table {
     height: 14px;
     display: block;
   }
+}
+
+.user-menu .quick-access-panel li.user-status .relative-date {
+  text-align: left;
+  font-size: var(--font-down-3);
+  padding-top: 0.45em;
+  margin-left: 0.75em;
+  color: var(--primary-medium);
 }
 
 .user-menu .quick-access-panel li.do-not-disturb {
@@ -466,7 +455,7 @@ table {
 
     .relative-date {
       text-align: left;
-      font-size: $font-down-3;
+      font-size: var(--font-down-3);
       padding-top: 3px;
       margin-left: 0.75em;
       color: var(--primary-medium);
@@ -500,77 +489,6 @@ table {
       margin-bottom: 0;
     }
   }
-}
-
-.ring-backdrop-spotlight {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  top: -18px;
-  right: -18px;
-  background-image: radial-gradient(
-    40px at 50% 50%,
-    rgba(255, 255, 255, 0.15) 95%,
-    rgba(var(--always-black-rgb), 0.65) 100%
-  );
-}
-
-.ring-backdrop {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  top: -18px !important;
-  right: -18px !important;
-  box-shadow: 0 0 0 9999px rgba(var(--always-black-rgb), 0.65);
-  z-index: z("modal", "overlay");
-}
-
-.ring-first-notification {
-  position: absolute;
-  text-align: left;
-  right: 70px;
-  top: 60px;
-  width: 230px;
-  line-height: $line-height-medium;
-
-  .first-notification,
-  .read-later {
-    display: block;
-    margin-bottom: 36px;
-  }
-
-  .skip-new-user-tips,
-  .read-later-link {
-    font-size: $font-down-1;
-    text-decoration: underline;
-  }
-
-  &,
-  .skip-new-user-tips,
-  .read-later-link {
-    color: #eee;
-  }
-}
-
-.ring {
-  $gradient-start: transparent;
-  $gradient-end: #090;
-  background: -webkit-radial-gradient($gradient-start, $gradient-end);
-  background: -o-radial-gradient($gradient-start, $gradient-end);
-  background: -moz-radial-gradient($gradient-start, $gradient-end);
-  background: radial-gradient($gradient-start, $gradient-end);
-  top: -11px !important;
-  right: 23.5px !important;
-  border-radius: 100%;
-  width: 20px;
-  height: 20px;
-  -moz-animation-iteration-count: infinite;
-  -webkit-animation-iteration-count: infinite;
-  -webkit-transform-origin: center;
-  -moz-animation-duration: 3s;
-  -webkit-animation-duration: 3s;
-  -moz-animation-name: ping;
-  -webkit-animation-name: ping;
 }
 
 .fade {
@@ -609,7 +527,7 @@ table {
 .content-list {
   h3 {
     color: var(--primary-medium);
-    font-size: $font-up-1;
+    font-size: var(--font-up-1);
     padding-left: 5px;
     margin-bottom: 10px;
   }
@@ -638,6 +556,7 @@ table {
         &.active {
           font-weight: bold;
           color: var(--primary);
+          background: var(--d-selected);
         }
       }
     }
@@ -651,18 +570,14 @@ table {
     display: inline-block;
     margin-bottom: 0;
     flex: 0 0 auto;
+    max-width: 100%;
   }
 
-  .control-group {
-    @include clearfix;
-  }
-
-  .control-label {
-    font-family: $heading-font-family;
-
+  .control-label:not(.checkbox-label) {
+    font-family: var(--heading-font-family);
     font-weight: bold;
-    font-size: $font-up-2;
-    line-height: $line-height-large;
+    font-size: var(--font-up-2);
+    line-height: var(--line-height-large);
   }
 
   .controls {
@@ -672,8 +587,21 @@ table {
 
 // Special elements
 
+#main-outlet-wrapper {
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-areas: "sidebar content";
+  grid-template-columns: 0 minmax(0, 1fr); // 0 column width needs to be set for CSS transitions
+  gap: 0;
+
+  #main-outlet {
+    grid-area: content;
+  }
+}
+
 #main-outlet {
-  padding-top: 2.5em;
+  padding-top: 1.5em;
 }
 
 #main {
@@ -708,7 +636,7 @@ table {
 
 #loading-message {
   position: absolute;
-  font-size: $font-up-5;
+  font-size: var(--font-up-5);
   text-align: center;
   top: 120px;
   left: 500px;
@@ -850,7 +778,7 @@ table {
 }
 
 .broken-theme-alert {
-  font-size: $base-font-size;
+  font-size: var(--base-font-size);
   font-weight: bold;
   padding: 5px 0;
   background: var(--danger);

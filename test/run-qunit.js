@@ -37,7 +37,7 @@ async function runAllTests() {
     const options = {
       chromeFlags: [
         "--disable-gpu",
-        "--headless",
+        "--headless=new",
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--mute-audio",
@@ -159,7 +159,7 @@ async function runAllTests() {
       expression: `(${qunit_script})();`,
     });
 
-    if (args[0].indexOf("report_requests=1") > -1) {
+    if (args[0].includes("report_requests=1")) {
       await Runtime.evaluate({
         expression: "QUnit.config.logAllRequests = true",
       });
@@ -212,8 +212,6 @@ function logQUnit() {
   let assertionErrors = [];
 
   console.log("\nRunning: " + JSON.stringify(QUnit.urlParams) + "\n");
-
-  QUnit.config.testTimeout = 10000;
 
   let durations = {};
 

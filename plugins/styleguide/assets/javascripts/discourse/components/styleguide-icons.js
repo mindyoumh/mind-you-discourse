@@ -1,6 +1,7 @@
 import Component from "@ember/component";
 import { afterRender } from "discourse-common/utils/decorators";
-import { later } from "@ember/runloop";
+import { REPLACEMENTS } from "discourse-common/lib/icon-library";
+import discourseLater from "discourse-common/lib/later";
 
 export default Component.extend({
   tagName: "section",
@@ -17,10 +18,11 @@ export default Component.extend({
     let symbols = document.querySelectorAll("#svg-sprites symbol");
     if (symbols.length > 0) {
       let ids = Array.from(symbols).mapBy("id");
-      this.set("iconIds", ids.sort());
+      ids.push(...Object.keys(REPLACEMENTS));
+      this.set("iconIds", [...new Set(ids.sort())]);
     } else {
       // Let's try again a short time later if there are no svgs loaded yet
-      later(this, this.setIconIds, 1500);
+      discourseLater(this, this.setIconIds, 1500);
     }
   },
 });

@@ -5,6 +5,9 @@ import { createWidget } from "discourse/widgets/widget";
 import { h } from "virtual-dom";
 import { replaceEmoji } from "discourse/widgets/emoji";
 import autoGroupFlairForUser from "discourse/lib/avatar-flair";
+import { userPath } from "discourse/lib/url";
+import RenderGlimmer from "discourse/widgets/render-glimmer";
+import { hbs } from "ember-cli-htmlbars";
 
 const LINKS_SHOWN = 5;
 
@@ -79,20 +82,25 @@ createWidget("topic-participant", {
       linkContents.push(h("span.post-count", attrs.post_count.toString()));
     }
 
-    if (attrs.flair_url || attrs.flair_bg_color) {
-      linkContents.push(this.attach("avatar-flair", attrs));
-    } else {
-      const autoFlairAttrs = autoGroupFlairForUser(this.site, attrs);
-      if (autoFlairAttrs) {
-        linkContents.push(this.attach("avatar-flair", autoFlairAttrs));
+    if (attrs.flair_group_id) {
+      if (attrs.flair_url || attrs.flair_bg_color) {
+        linkContents.push(this.attach("avatar-flair", attrs));
+      } else {
+        const autoFlairAttrs = autoGroupFlairForUser(this.site, attrs);
+        if (autoFlairAttrs) {
+          linkContents.push(this.attach("avatar-flair", autoFlairAttrs));
+        }
       }
     }
-
     return h(
       "a.poster.trigger-user-card",
       {
         className: state.toggled ? "toggled" : null,
-        attributes: { title: attrs.username, "data-user-card": attrs.username },
+        attributes: {
+          title: attrs.username,
+          "data-user-card": attrs.username,
+          href: userPath(attrs.username),
+        },
       },
       linkContents
     );
@@ -250,12 +258,14 @@ createWidget("topic-map-summary", {
           ? "topic.expand_details"
           : "topic.collapse_details",
         icon: state.collapsed ? "chevron-down" : "chevron-up",
+        ariaExpanded: state.collapsed ? "false" : "true",
+        ariaControls: "topic-map-expanded",
         action: "toggleMap",
         className: "btn",
       })
     );
 
-    return [nav, h("ul.clearfix", contents)];
+    return [nav, h("ul", contents)];
   },
 });
 
@@ -292,7 +302,7 @@ createWidget("topic-map-link", {
 });
 
 createWidget("topic-map-expanded", {
-  tagName: "section.topic-map-expanded",
+  tagName: "section.topic-map-expanded#topic-map-expanded",
   buildKey: (attrs) => `topic-map-expanded-${attrs.id}`,
 
   defaultState() {
@@ -303,7 +313,7 @@ createWidget("topic-map-expanded", {
     let avatars;
 
     if (attrs.participants && attrs.participants.length > 0) {
-      avatars = h("section.avatars.clearfix", [
+      avatars = h("section.avatars", [
         h("h3", I18n.t("topic_map.participants_title")),
         renderParticipants.call(this, attrs.userFilters, attrs.participants),
       ]);
@@ -368,7 +378,7 @@ export default createWidget("topic-map", {
   buildKey: (attrs) => `topic-map-${attrs.id}`,
 
   defaultState(attrs) {
-    return { collapsed: !attrs.hasTopicSummary };
+    return { collapsed: !attrs.hasTopRepliesSummary };
   },
 
   html(attrs, state) {
@@ -378,8 +388,8 @@ export default createWidget("topic-map", {
       contents.push(this.attach("topic-map-expanded", attrs));
     }
 
-    if (attrs.hasTopicSummary) {
-      contents.push(this.attach("toggle-topic-summary", attrs));
+    if (attrs.hasTopRepliesSummary || attrs.summarizable) {
+      contents.push(this.buildSummaryBox(attrs));
     }
 
     if (attrs.showPMMap) {
@@ -390,5 +400,22 @@ export default createWidget("topic-map", {
 
   toggleMap() {
     this.state.collapsed = !this.state.collapsed;
+  },
+
+  buildSummaryBox(attrs) {
+    return new RenderGlimmer(
+      this,
+      "section.information.toggle-summary",
+      hbs`<SummaryBox 
+        @postAttrs={{@data.postAttrs}}
+        @topRepliesToggle={{@data.actionDispatchFunc}} 
+      />`,
+      {
+        postAttrs: attrs,
+        actionDispatchFunc: (actionName) => {
+          this.sendWidgetAction(actionName);
+        },
+      }
+    );
   },
 });

@@ -83,3 +83,12 @@ en:
           title: "Spinners"
         empty_state:
           title: "Empty State"
+        rich_tooltip:
+          title: "Rich Tooltip"
+          description: "Description"
+          header: "Header"
+          hover_to_see: "Hover to see a tooltip"
+        char_counter:
+          title: "Character Counter"
+          placeholder: "Enter your text here..."
+          

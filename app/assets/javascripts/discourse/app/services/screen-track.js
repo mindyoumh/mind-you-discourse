@@ -7,6 +7,7 @@ import {
   resetHighestReadCache,
   setHighestReadCache,
 } from "discourse/lib/topic-list-tracker";
+import { run } from "@ember/runloop";
 
 // We use this class to track how long posts in a topic are on the screen.
 const PAUSE_UNLESS_SCROLLED = 1000 * 60 * 3;
@@ -38,6 +39,7 @@ export default class ScreenTrack extends Service {
 
   start(topicId, topicController) {
     const currentTopicId = this._topicId;
+
     if (currentTopicId && currentTopicId !== topicId) {
       this.tick();
       this.flush();
@@ -47,8 +49,10 @@ export default class ScreenTrack extends Service {
 
     // Create an interval timer if we don't have one.
     if (!this._interval) {
-      this._interval = setInterval(() => this.tick(), 1000);
-      $(window).on("scroll.screentrack", this.scrolled);
+      this._interval = setInterval(() => {
+        run(() => this.tick());
+      }, 1000);
+      window.addEventListener("scroll", this.scrolled);
     }
 
     this._topicId = topicId;
@@ -61,7 +65,7 @@ export default class ScreenTrack extends Service {
       return;
     }
 
-    $(window).off("scroll.screentrack", this.scrolled);
+    window.removeEventListener("scroll", this.scrolled);
 
     this.tick();
     this.flush();
@@ -128,13 +132,14 @@ export default class ScreenTrack extends Service {
         }
       });
       found.topicTime += topicTime;
-      found.timings = Object.assign({}, timings, found.timings);
+      found.timings = { ...timings, ...found.timings };
     } else {
       this._consolidatedTimings.push({ timings, topicTime, topicId });
     }
 
     const highestRead = parseInt(Object.keys(timings).lastObject, 10);
     const cachedHighestRead = this.highestReadFromCache(topicId);
+
     if (!cachedHighestRead || cachedHighestRead < highestRead) {
       setHighestReadCache(topicId, highestRead);
     }
@@ -173,7 +178,7 @@ export default class ScreenTrack extends Service {
 
     this._inProgress = true;
 
-    ajax("/topics/timings", {
+    return ajax("/topics/timings", {
       data,
       type: "POST",
       headers: {
@@ -182,6 +187,10 @@ export default class ScreenTrack extends Service {
       },
     })
       .then(() => {
+        if (this.isDestroying || this.isDestroyed) {
+          return;
+        }
+
         this._ajaxFailures = 0;
         const topicController = this._topicController;
         if (topicController) {
@@ -196,10 +205,11 @@ export default class ScreenTrack extends Service {
             resetHighestReadCache(topicId);
           }
         }
+
         this.appEvents.trigger("topic:timings-sent", data);
       })
       .catch((e) => {
-        if (e.jqXHR && ALLOWED_AJAX_FAILURES.indexOf(e.jqXHR.status) > -1) {
+        if (e.jqXHR && ALLOWED_AJAX_FAILURES.includes(e.jqXHR.status)) {
           const delay = AJAX_FAILURE_DELAYS[this._ajaxFailures];
           this._ajaxFailures += 1;
 
@@ -277,9 +287,12 @@ export default class ScreenTrack extends Service {
     this.topicTrackingState.updateSeen(topicId, highestSeen);
 
     if (newTimingsKeys.length > 0) {
-      if (this.currentUser && !isTesting()) {
+      if (this.currentUser) {
         this.consolidateTimings(newTimings, this._topicTime, topicId);
-        this.sendNextConsolidatedTiming();
+
+        if (!isTesting()) {
+          this.sendNextConsolidatedTiming();
+        }
       } else if (this._anonCallback) {
         // Anonymous viewer - save to localStorage
         const storage = this.keyValueStore;
@@ -297,7 +310,7 @@ export default class ScreenTrack extends Service {
         }
 
         if (
-          topicIds.indexOf(topicId) === -1 &&
+          !topicIds.includes(topicId) &&
           topicIds.length < ANON_MAX_TOPIC_IDS
         ) {
           topicIds.push(topicId);

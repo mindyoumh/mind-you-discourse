@@ -15,21 +15,28 @@ class WebHookEventType < ActiveRecord::Base
   GROUP_USER = 14
   LIKE = 15
   USER_PROMOTED = 16
+  TOPIC_VOTING = 17
 
   has_and_belongs_to_many :web_hooks
 
-  default_scope { order('id ASC') }
+  default_scope { order("id ASC") }
 
   validates :name, presence: true, uniqueness: true
 
   def self.active
     ids_to_exclude = []
-    ids_to_exclude << SOLVED unless defined?(SiteSetting.solved_enabled) && SiteSetting.solved_enabled
-    ids_to_exclude << ASSIGN unless defined?(SiteSetting.assign_enabled) && SiteSetting.assign_enabled
+    unless defined?(SiteSetting.solved_enabled) && SiteSetting.solved_enabled
+      ids_to_exclude << SOLVED
+    end
+    unless defined?(SiteSetting.assign_enabled) && SiteSetting.assign_enabled
+      ids_to_exclude << ASSIGN
+    end
+    unless defined?(SiteSetting.voting_enabled) && SiteSetting.voting_enabled
+      ids_to_exclude << TOPIC_VOTING
+    end
 
     self.where.not(id: ids_to_exclude)
   end
-
 end
 
 # == Schema Information

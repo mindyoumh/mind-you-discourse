@@ -1,6 +1,7 @@
 import User from "discourse/models/user";
-import showModal from "discourse/lib/show-modal";
 import getURL from "discourse-common/lib/get-url";
+import { getOwner } from "discourse-common/lib/get-owner";
+import downloadCalendarModal from "discourse/components/modal/download-calendar";
 
 export function downloadCalendar(title, dates) {
   const currentUser = User.current();
@@ -8,7 +9,7 @@ export function downloadCalendar(title, dates) {
   const formattedDates = formatDates(dates);
   title = title.trim();
 
-  switch (currentUser.default_calendar) {
+  switch (currentUser.user_option.default_calendar) {
     case "none_selected":
       _displayModal(title, formattedDates);
       break;
@@ -80,7 +81,8 @@ export function generateIcsData(title, dates) {
 }
 
 function _displayModal(title, dates) {
-  showModal("download-calendar", { model: { title, dates } });
+  const modal = getOwner(this).lookup("service:modal");
+  modal.show(downloadCalendarModal, { model: { calendar: { title, dates } } });
 }
 
 function _formatDateForGoogleApi(date) {

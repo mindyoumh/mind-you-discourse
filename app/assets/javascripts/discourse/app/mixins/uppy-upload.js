@@ -21,11 +21,12 @@ import UppyS3Multipart from "discourse/mixins/uppy-s3-multipart";
 import UppyChunkedUploader from "discourse/lib/uppy-chunked-uploader-plugin";
 import { bind, on } from "discourse-common/utils/decorators";
 import { warn } from "@ember/debug";
-import bootbox from "bootbox";
+import { inject as service } from "@ember/service";
 
 export const HUGE_FILE_THRESHOLD_BYTES = 104_857_600; // 100MB
 
 export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
+  dialog: service(),
   uploading: false,
   uploadProgress: 0,
   _uppyInstance: null,
@@ -34,6 +35,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
   id: null,
   uploadRootPath: "/uploads",
   fileInputSelector: ".hidden-upload-field",
+  autoFindInput: true,
 
   uploadDone() {
     warn("You should implement `uploadDone`", {
@@ -67,12 +69,15 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
 
   @on("didInsertElement")
   _initialize() {
-    this.setProperties({
-      fileInputEl: this.element.querySelector(this.fileInputSelector),
-    });
+    if (this.autoFindInput) {
+      this.setProperties({
+        fileInputEl: this.element.querySelector(this.fileInputSelector),
+      });
+    } else if (!this.fileInputEl) {
+      return;
+    }
     this.set("allowMultipleFiles", this.fileInputEl.multiple);
     this.set("inProgressUploads", []);
-    this._triggerInProgressUploadsEvent();
 
     this._bindFileInputChange();
 
@@ -130,7 +135,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
         }
 
         if (tooMany) {
-          bootbox.alert(
+          this.dialog.alert(
             I18n.t("post.errors.too_many_dragged_and_dropped_files", {
               count: this.allowMultipleFiles ? maxFiles : 1,
             })
@@ -147,7 +152,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
       },
     });
 
-    // droptarget is a UI plugin, only preprocessors must call _useUploadPlugin
+    // DropTarget is a UI plugin, only preprocessors must call _useUploadPlugin
     this._uppyInstance.use(DropTarget, this._uploadDropTargetOptions());
 
     this._uppyInstance.on("progress", (progress) => {
@@ -159,6 +164,10 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
     });
 
     this._uppyInstance.on("upload", (data) => {
+      if (this.isDestroying || this.isDestroyed) {
+        return;
+      }
+
       this._addNeedProcessing(data.fileIDs.length);
       const files = data.fileIDs.map((fileId) =>
         this._uppyInstance.getFile(fileId)
@@ -216,6 +225,9 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
             );
 
             this._triggerInProgressUploadsEvent();
+            if (this.inProgressUploads.length === 0) {
+              this._allUploadsComplete();
+            }
           })
           .catch((errResponse) => {
             displayErrorForUpload(errResponse, this.siteSettings, file.name);
@@ -230,7 +242,11 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
           upload
         );
         this.uploadDone(deepMerge(upload, { file_name: file.name }));
+
         this._triggerInProgressUploadsEvent();
+        if (this.inProgressUploads.length === 0) {
+          this._allUploadsComplete();
+        }
       }
     });
 
@@ -255,12 +271,9 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
       });
     });
 
-    this._uppyInstance.on("complete", () => {
-      run(() => {
-        this.appEvents.trigger(`upload-mixin:${this.id}:all-uploads-complete`);
-        this._reset();
-      });
-    });
+    if (this.siteSettings.enable_upload_debug_mode) {
+      this._instrumentUploadTimings();
+    }
 
     // TODO (martin) preventDirectS3Uploads is necessary because some of
     // the current upload mixin components, for example the emoji uploader,
@@ -289,8 +302,10 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
     this._uppyInstance.on("cancel-all", () => {
       this.appEvents.trigger(`upload-mixin:${this.id}:uploads-cancelled`);
       if (!this.isDestroyed && !this.isDestroying) {
-        this.set("inProgressUploads", []);
-        this._triggerInProgressUploadsEvent();
+        if (this.inProgressUploads.length) {
+          this.set("inProgressUploads", []);
+          this._triggerInProgressUploadsEvent();
+        }
       }
     });
 
@@ -309,6 +324,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
   },
 
   _triggerInProgressUploadsEvent() {
+    this.onProgressUploadsChanged?.(this.inProgressUploads);
     this.appEvents.trigger(
       `upload-mixin:${this.id}:in-progress-uploads`,
       this.inProgressUploads
@@ -381,6 +397,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
               method: "put",
               url: response.url,
               headers: {
+                ...response.signed_headers,
                 "Content-Type": file.type,
               },
             };
@@ -444,7 +461,7 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
   },
 
   _reset() {
-    this._uppyInstance?.reset();
+    this._uppyInstance?.cancelAll();
     this.setProperties({
       uploading: false,
       processing: false,
@@ -475,5 +492,14 @@ export default Mixin.create(UppyS3Multipart, ExtendableUploader, {
   // default onDragOver and removes it onDragLeave
   _uploadDropTargetOptions() {
     return { target: this.element };
+  },
+
+  _allUploadsComplete() {
+    if (this.isDestroying || this.isDestroyed) {
+      return;
+    }
+
+    this.appEvents.trigger(`upload-mixin:${this.id}:all-uploads-complete`);
+    this._reset();
   },
 });

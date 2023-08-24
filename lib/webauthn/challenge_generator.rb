@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-module Webauthn
+module DiscourseWebauthn
   class ChallengeGenerator
     class ChallengeSession
       attr_reader :challenge, :rp_id, :rp_name
@@ -35,7 +35,7 @@ module Webauthn
       ChallengeSession.new(
         challenge: SecureRandom.hex(30),
         rp_id: Discourse.current_hostname,
-        rp_name: SiteSetting.title
+        rp_name: SiteSetting.title,
       )
     end
   end

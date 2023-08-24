@@ -18,7 +18,7 @@
   margin: 0 auto;
   max-width: var(--modal-max-width);
   background-color: var(--secondary);
-  box-shadow: shadow("modal");
+  box-shadow: var(--shadow-modal);
 
   .select-kit {
     width: 220px;
@@ -44,7 +44,7 @@
   overflow: auto;
   height: auto;
   background-color: var(--secondary);
-  box-shadow: shadow("card");
+  box-shadow: var(--shadow-card);
   background-clip: padding-box;
 }
 
@@ -74,6 +74,8 @@
   .modal-close {
     order: 2;
     margin-left: auto;
+    align-self: start;
+    padding: 0.15em 0;
 
     .close {
       color: var(--primary-high);
@@ -133,8 +135,12 @@
     }
   }
 
-  &:not(.history-modal) {
-    .modal-body:not(.reorder-categories):not(.poll-ui-builder):not(.poll-breakdown) {
+  &:not(.bookmark-reminder-modal):not(.history-modal):not(
+      .sidebar__edit-navigation-menu__modal
+    ) {
+    .modal-body:not(.reorder-categories):not(.poll-ui-builder):not(
+        .poll-breakdown
+      ) {
       max-height: 80vh !important;
       @media screen and (max-height: 500px) {
         max-height: 65vh !important;
@@ -153,16 +159,12 @@
   align-items: center;
   padding: 14px 15px 10px;
   border-top: 1px solid var(--primary-low);
-  --btn-bottom-margin: 0.3em;
+  gap: 0.3em 0;
   .btn {
-    margin: 0 0.75em var(--btn-bottom-margin) 0;
+    margin: 0 0.75em 0 0;
     &[href] {
       min-height: unset;
     }
-  }
-
-  a {
-    margin-bottom: var(--btn-bottom-margin);
   }
 }
 
@@ -171,7 +173,7 @@
     padding: 10px 30px 10px 15px;
     background-color: var(--secondary);
     li > a {
-      font-size: $font-0;
+      font-size: var(--font-0);
     }
     border-bottom: 1px solid var(--primary-low);
   }
@@ -208,7 +210,7 @@
           position: absolute;
           top: 70%;
           padding: 5px 10px;
-          box-shadow: shadow("card");
+          box-shadow: var(--shadow-card);
           z-index: 5;
           background-color: var(--secondary);
           max-height: 150px;
@@ -221,14 +223,14 @@
             display: block;
             &:hover,
             &:focus {
-              background-color: var(--highlight-medium);
+              background-color: var(--highlight-bg);
             }
             .search-category {
               display: flex;
               align-items: center;
             }
             .discourse-tags {
-              font-size: $font-down-1;
+              font-size: var(--font-down-1);
             }
           }
         }
@@ -240,7 +242,7 @@
       box-sizing: border-box;
     }
     p {
-      font-size: $font-0;
+      font-size: var(--font-0);
     }
     .archetype-option {
       margin-bottom: 20px;
@@ -269,7 +271,7 @@
 
   // password reset modal
   .modal-body.forgot-password-modal p {
-    font-size: $font-0;
+    font-size: var(--font-0);
   }
 
   pre code {
@@ -279,48 +281,92 @@
 }
 
 .reply-where-modal {
-  max-width: 400px;
-
-  h1 {
-    margin: 0;
-    font-size: $font-up-2;
+  .dialog-content {
+    width: 100%;
+    min-width: unset;
+    max-width: 30em;
   }
 
-  .d-modal-cancel {
-    width: 100%;
-    margin: 0.5em 0;
+  .dialog-footer {
+    display: block;
   }
 
   .btn {
     display: block;
     text-align: left;
-    font-size: $font-up-1;
-    line-height: $line-height-medium;
     margin-bottom: 0.75em;
-    font-weight: bold;
+    margin-right: 0;
     overflow: hidden;
     width: 100%;
-    &:first-of-type {
-      margin-top: 0.25em;
-    }
-    .topic-title {
-      font-weight: normal;
-    }
-  }
-}
 
-.d-modal-cancel {
-  margin-left: 1em;
-  color: var(--primary-medium);
-  &:hover {
-    color: var(--danger);
+    &.dialog-close {
+      display: none;
+    }
+
+    &.btn-reply-on-original {
+      --text-color: var(--secondary);
+    }
+
+    &.btn-reply-where__cancel {
+      padding-left: 0;
+      margin: 0;
+    }
+
+    &.btn-reply-here {
+      --text-color: var(--primary);
+      .discourse-no-touch & {
+        &:hover {
+          --text-color: var(--secondary);
+        }
+      }
+    }
+
+    &.btn-reply-where {
+      min-height: 3em; // for situations when there are no categories/tags
+    }
+
+    .fancy-title {
+      display: inline-block;
+      width: 100%;
+
+      @include ellipsis;
+    }
+
+    .topic-title__top-line {
+      display: flex;
+      align-items: baseline;
+      color: var(--text-color);
+      font-size: var(--font-up-1);
+      .d-icon {
+        color: var(--text-color);
+        margin: 0;
+      }
+    }
+
+    .topic-statuses {
+      display: flex;
+      font-size: 0.95em;
+    }
+
+    .topic-title__bottom-line {
+      margin-top: 0.15em;
+      display: flex;
+      align-items: baseline;
+      .discourse-tags {
+        font-size: var(--font-down-1);
+      }
+      .category-name,
+      .discourse-tag {
+        color: var(--text-color);
+      }
+    }
   }
 }
 
 .delete-user-modal {
   .modal-footer {
     .btn {
-      line-height: $line-height-medium;
+      line-height: var(--line-height-medium);
     }
   }
 }
@@ -345,6 +391,8 @@
 }
 
 .incoming-email-modal {
+  max-height: 80vh;
+
   .btn {
     transition: none;
     background-color: transparent;
@@ -461,7 +509,7 @@
   .flag-action-type-details {
     width: 100%;
     max-width: 500px;
-    line-height: $line-height-large;
+    line-height: var(--line-height-large);
   }
 }
 
@@ -471,7 +519,7 @@
 
 .custom-message-length {
   color: var(--primary-medium);
-  font-size: $font-down-1;
+  font-size: var(--font-down-1);
 }
 
 .jump-to-post-modal {
@@ -554,6 +602,14 @@
     }
     .topic-categories {
       width: 100%;
+    }
+  }
+
+  #choosing-topic {
+    form {
+      hr {
+        margin-bottom: 0.5em;
+      }
     }
   }
 }
@@ -645,36 +701,21 @@
 }
 
 .topic-bulk-actions-modal {
+  .modal-inner-container {
+    min-width: 0;
+    width: 100%;
+  }
   p {
     margin-top: 0;
   }
-  &.full .modal-body {
-    height: 400px;
-    max-height: 400px;
-  }
-
   .bulk-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    margin-right: -1%;
-
-    .btn {
-      flex: 1 0 30%;
-      margin-bottom: 1em;
-      margin-right: 1%;
-      white-space: nowrap;
-      overflow: hidden;
-      max-width: 33%;
-
-      @media screen and (max-width: 767px) {
-        flex: 1 0 48%;
-        max-width: 48%;
-      }
-
-      @include breakpoint(mobile-extra-large) {
-        flex: 1 1 auto;
-        min-width: 49%;
-      }
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12em, 1fr));
+    gap: 0.5em;
+    max-width: 100%;
+    min-width: 0;
+    .d-button-label {
+      @include ellipsis;
     }
   }
 }
@@ -727,4 +768,15 @@
   button {
     top: 21px;
   }
+}
+
+.json-editor-btn-delete {
+  @extend .btn-danger;
+  @extend .no-text;
+}
+
+.json-editor-btn-collapse {
+  @extend .no-text;
+  @extend .btn-flat;
+  @extend .btn-small;
 }

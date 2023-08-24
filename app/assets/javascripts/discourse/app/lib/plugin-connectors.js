@@ -1,14 +1,18 @@
 import { buildRawConnectorCache } from "discourse-common/lib/raw-templates";
 import deprecated from "discourse-common/lib/deprecated";
+import {
+  getComponentTemplate,
+  hasInternalComponentManager,
+  setComponentTemplate,
+} from "@glimmer/manager";
+import templateOnly from "@ember/component/template-only";
 
 let _connectorCache;
 let _rawConnectorCache;
 let _extraConnectorClasses = {};
-let _classPaths;
 
 export function resetExtraClasses() {
   _extraConnectorClasses = {};
-  _classPaths = undefined;
 }
 
 // Note: In plugins, define a class by path and it will be wired up automatically
@@ -17,21 +21,19 @@ export function extraConnectorClass(name, obj) {
   _extraConnectorClasses[name] = obj;
 }
 
-const DefaultConnectorClass = {
-  actions: {},
-  shouldRender: () => true,
-  setupComponent() {},
-  teardownComponent() {},
-};
+const OUTLET_REGEX =
+  /^discourse(\/[^\/]+)*?(?<template>\/templates)?\/connectors\/(?<outlet>[^\/]+)\/(?<name>[^\/\.]+)$/;
 
-function findOutlets(collection, callback) {
-  Object.keys(collection).forEach(function (res) {
-    if (res.indexOf("/connectors/") !== -1) {
-      const segments = res.split("/");
-      let outletName = segments[segments.length - 2];
-      const uniqueName = segments[segments.length - 1];
-
-      callback(outletName, res, uniqueName);
+function findOutlets(keys, callback) {
+  return keys.forEach((res) => {
+    const match = res.match(OUTLET_REGEX);
+    if (match) {
+      callback({
+        outletName: match.groups.outlet,
+        connectorName: match.groups.name,
+        moduleName: res,
+        isTemplate: !!match.groups.template,
+      });
     }
   });
 }
@@ -41,38 +43,133 @@ export function clearCache() {
   _rawConnectorCache = null;
 }
 
-function findClass(outletName, uniqueName) {
-  if (!_classPaths) {
-    _classPaths = {};
-    findOutlets(require._eak_seen, (outlet, res, un) => {
-      _classPaths[`${outlet}/${un}`] = requirejs(res).default;
-    });
+/**
+ * Sets component template, ignoring errors if it's already set to the same template
+ */
+function safeSetComponentTemplate(template, component) {
+  try {
+    setComponentTemplate(template, component);
+  } catch (e) {
+    if (getComponentTemplate(component) !== template) {
+      throw e;
+    }
+  }
+}
+
+/**
+ * Clear the cache of connectors. Should only be used in tests when
+ * `requirejs.entries` is changed.
+ */
+export function expireConnectorCache() {
+  _connectorCache = null;
+}
+
+class ConnectorInfo {
+  #componentClass;
+  #templateOnly;
+
+  constructor(outletName, connectorName) {
+    this.outletName = outletName;
+    this.connectorName = connectorName;
   }
 
-  const id = `${outletName}/${uniqueName}`;
-  let foundClass = _extraConnectorClasses[id] || _classPaths[id];
+  get componentClass() {
+    return (this.#componentClass ??= this.#buildComponentClass());
+  }
 
-  return foundClass
-    ? Object.assign({}, DefaultConnectorClass, foundClass)
-    : DefaultConnectorClass;
+  get templateOnly() {
+    return (this.#templateOnly ??= this.#buildTemplateOnlyClass());
+  }
+
+  get classicClassNames() {
+    return `${this.outletName}-outlet ${this.connectorName}`;
+  }
+
+  get connectorClass() {
+    if (this.classModule) {
+      return require(this.classModule).default;
+    } else {
+      return _extraConnectorClasses[`${this.outletName}/${this.connectorName}`];
+    }
+  }
+
+  get template() {
+    if (this.templateModule) {
+      return require(this.templateModule).default;
+    }
+  }
+
+  #buildComponentClass() {
+    const klass = this.connectorClass;
+    if (klass && hasInternalComponentManager(klass)) {
+      if (this.template) {
+        safeSetComponentTemplate(this.template, klass);
+      }
+      this.#warnUnusableHooks();
+      return klass;
+    } else {
+      return false;
+    }
+  }
+
+  #buildTemplateOnlyClass() {
+    const component = templateOnly();
+    setComponentTemplate(this.template, component);
+    this.#warnUnusableHooks();
+    return component;
+  }
+
+  #warnUnusableHooks() {
+    for (const methodName of [
+      "actions",
+      "setupComponent",
+      "teardownComponent",
+    ]) {
+      if (this.connectorClass?.[methodName]) {
+        deprecated(
+          `actions, setupComponent and teardownComponent hooks cannot be used with Glimmer plugin outlets. Define a component class instead. (${this.outletName}/${this.connectorName}).`,
+          { id: "discourse.plugin-outlet-classic-hooks" }
+        );
+      }
+    }
+  }
 }
 
 function buildConnectorCache() {
   _connectorCache = {};
 
-  // eslint-disable-next-line no-undef
-  findOutlets(Ember.TEMPLATES, (outletName, resource, uniqueName) => {
-    _connectorCache[outletName] = _connectorCache[outletName] || [];
+  const outletsByModuleName = {};
+  findOutlets(
+    Object.keys(require.entries),
+    ({ outletName, connectorName, moduleName, isTemplate }) => {
+      let key = isTemplate
+        ? moduleName.replace("/templates/", "/")
+        : moduleName;
 
-    _connectorCache[outletName].push({
-      outletName,
-      templateName: resource.replace("javascripts/", ""),
-      // eslint-disable-next-line no-undef
-      template: Ember.TEMPLATES[resource],
-      classNames: `${outletName}-outlet ${uniqueName}`,
-      connectorClass: findClass(outletName, uniqueName),
-    });
-  });
+      let info = (outletsByModuleName[key] ??= new ConnectorInfo(
+        outletName,
+        connectorName
+      ));
+
+      if (isTemplate) {
+        info.templateModule = moduleName;
+      } else {
+        info.classModule = moduleName;
+      }
+    }
+  );
+
+  for (const info of Object.values(outletsByModuleName)) {
+    _connectorCache[info.outletName] ??= [];
+    _connectorCache[info.outletName].push(info);
+  }
+}
+
+export function connectorsExist(outletName) {
+  if (!_connectorCache) {
+    buildConnectorCache();
+  }
+  return Boolean(_connectorCache[outletName]);
 }
 
 export function connectorsFor(outletName) {
@@ -84,13 +181,14 @@ export function connectorsFor(outletName) {
 
 export function renderedConnectorsFor(outletName, args, context) {
   return connectorsFor(outletName).filter((con) => {
-    return con.connectorClass.shouldRender(args, context);
+    const shouldRender = con.connectorClass?.shouldRender;
+    return !shouldRender || shouldRender(args, context);
   });
 }
 
 export function rawConnectorsFor(outletName) {
   if (!_rawConnectorCache) {
-    _rawConnectorCache = buildRawConnectorCache(findOutlets);
+    _rawConnectorCache = buildRawConnectorCache();
   }
   return _rawConnectorCache[outletName] || [];
 }
@@ -105,7 +203,9 @@ export function buildArgsWithDeprecations(args, deprecatedArgs) {
   Object.keys(deprecatedArgs).forEach((key) => {
     Object.defineProperty(output, key, {
       get() {
-        deprecated(`${key} is deprecated`);
+        deprecated(`${key} is deprecated`, {
+          id: "discourse.plugin-connector.deprecated-arg",
+        });
 
         return deprecatedArgs[key];
       },

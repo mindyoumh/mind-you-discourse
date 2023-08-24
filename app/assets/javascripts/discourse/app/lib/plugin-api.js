@@ -1,3 +1,4 @@
+import I18n from "I18n";
 import ComposerEditor, {
   addComposerUploadHandler,
   addComposerUploadMarkdownResolver,
@@ -7,6 +8,7 @@ import {
   addButton,
   apiExtraButtons,
   removeButton,
+  replaceButton,
 } from "discourse/widgets/post-menu";
 import {
   addExtraIconRenderer,
@@ -54,18 +56,21 @@ import { addNavItem } from "discourse/models/nav-item";
 import { addPluginDocumentTitleCounter } from "discourse/components/d-document";
 import { addPluginOutletDecorator } from "discourse/components/plugin-connector";
 import { addPluginReviewableParam } from "discourse/components/reviewable-item";
-import { addPopupMenuOptionsCallback } from "discourse/controllers/composer";
+import {
+  addComposerSaveErrorCallback,
+  addPopupMenuOptionsCallback,
+} from "discourse/services/composer";
 import { addPostClassesCallback } from "discourse/widgets/post";
 import {
   addGroupPostSmallActionCode,
+  addPostSmallActionClassesCallback,
   addPostSmallActionIcon,
 } from "discourse/widgets/post-small-action";
-import { addQuickAccessProfileItem } from "discourse/widgets/quick-access-profile";
 import { addTagsHtmlCallback } from "discourse/lib/render-tags";
 import { addToolbarCallback } from "discourse/components/d-editor";
 import { addTopicParticipantClassesCallback } from "discourse/widgets/topic-map";
 import { addTopicTitleDecorator } from "discourse/components/topic-title";
-import { addUserMenuGlyph } from "discourse/widgets/user-menu";
+import { addUserMenuProfileTabItem } from "discourse/components/user-menu/profile-tab-content";
 import { addUsernameSelectorDecorator } from "discourse/helpers/decorate-username-selector";
 import { addWidgetCleanCallback } from "discourse/components/mount-widget";
 import deprecated from "discourse-common/lib/deprecated";
@@ -78,7 +83,10 @@ import { modifySelectKit } from "select-kit/mixins/plugin-api";
 import { on } from "@ember/object/evented";
 import { registerCustomAvatarHelper } from "discourse/helpers/user-avatar";
 import { registerCustomPostMessageCallback as registerCustomPostMessageCallback1 } from "discourse/controllers/topic";
-import { registerHighlightJSLanguage } from "discourse/lib/highlight-syntax";
+import {
+  registerHighlightJSLanguage,
+  registerHighlightJSPlugin,
+} from "discourse/lib/highlight-syntax";
 import { registerTopicFooterButton } from "discourse/lib/register-topic-footer-button";
 import { registerTopicFooterDropdown } from "discourse/lib/register-topic-footer-dropdown";
 import { registerDesktopNotificationHandler } from "discourse/lib/desktop-notifications";
@@ -87,20 +95,42 @@ import { replaceTagRenderer } from "discourse/lib/render-tag";
 import { registerCustomLastUnreadUrlCallback } from "discourse/models/topic";
 import { setNewCategoryDefaultColors } from "discourse/routes/new-category";
 import { addSearchResultsCallback } from "discourse/lib/search";
+import { addOnKeyDownCallback } from "discourse/widgets/search-menu";
 import {
   addQuickSearchRandomTip,
   addSearchSuggestion,
+  removeDefaultQuickSearchRandomTips,
 } from "discourse/widgets/search-menu-results";
+import { addSearchSuggestion as addGlimmerSearchSuggestion } from "discourse/components/search-menu/results/assistant";
 import { CUSTOM_USER_SEARCH_OPTIONS } from "select-kit/components/user-chooser";
 import { downloadCalendar } from "discourse/lib/download-calendar";
 import { consolePrefix } from "discourse/lib/source-identifier";
-import { addSectionLink } from "discourse/lib/sidebar/custom-topics-section-links";
+import { addSectionLink as addCustomCommunitySectionLink } from "discourse/lib/sidebar/custom-community-section-links";
+import {
+  addSidebarPanel,
+  addSidebarSection,
+} from "discourse/lib/sidebar/custom-sections";
+import {
+  registerCustomCategoryLockIcon,
+  registerCustomCategorySectionLinkPrefix,
+  registerCustomCountable as registerUserCategorySectionLinkCountable,
+} from "discourse/lib/sidebar/user/categories-section/category-section-link";
+import { registerCustomTagSectionLinkPrefixIcon } from "discourse/lib/sidebar/user/tags-section/base-tag-section-link";
+import { REFRESH_COUNTS_APP_EVENT_NAME as REFRESH_USER_SIDEBAR_CATEGORIES_SECTION_COUNTS_APP_EVENT_NAME } from "discourse/components/sidebar/user/categories-section";
+import DiscourseURL from "discourse/lib/url";
+import { registerNotificationTypeRenderer } from "discourse/lib/notification-types-manager";
+import { registerUserMenuTab } from "discourse/lib/user-menu/tab";
+import { registerModelTransformer } from "discourse/lib/model-transformers";
+import { registerCustomUserNavMessagesDropdownRow } from "discourse/controllers/user-private-messages";
+import { registerFullPageSearchType } from "discourse/controllers/full-page-search";
+import { registerHashtagType } from "discourse/lib/hashtag-autocomplete";
+import { _addBulkButton } from "discourse/components/modal/topic-bulk-actions";
 
 // If you add any methods to the API ensure you bump up the version number
 // based on Semantic Versioning 2.0.0. Please update the changelog at
 // docs/CHANGELOG-JAVASCRIPT-PLUGIN-API.md whenever you change the version
 // using the format described at https://keepachangelog.com/en/1.0.0/.
-const PLUGIN_API_VERSION = "1.3.0";
+export const PLUGIN_API_VERSION = "1.9.0";
 
 // This helper prevents us from applying the same `modifyClass` over and over in test mode.
 function canModify(klass, type, resolverName, changes) {
@@ -149,7 +179,7 @@ class PluginApi {
    * If the user is not logged in, it will be `null`.
    **/
   getCurrentUser() {
-    return this._lookupContainer("current-user:main");
+    return this._lookupContainer("service:current-user");
   }
 
   _lookupContainer(path) {
@@ -167,11 +197,15 @@ class PluginApi {
   _resolveClass(resolverName, opts) {
     opts = opts || {};
 
-    if (this.container.cache[resolverName]) {
+    if (
+      this.container.cache[resolverName] ||
+      (resolverName === "model:user" &&
+        this.container.lookup("service:current-user"))
+    ) {
       // eslint-disable-next-line no-console
       console.warn(
         consolePrefix(),
-        `"${resolverName}" was already cached in the container. Changes won't be applied.`
+        `"${resolverName}" has already been initialized and registered as a singleton. Move the modifyClass call earlier in the boot process for changes to take effect. https://meta.discourse.org/t/262064`
       );
     }
 
@@ -215,7 +249,15 @@ class PluginApi {
 
     if (canModify(klass, "member", resolverName, changes)) {
       delete changes.pluginId;
-      klass.class.reopen(changes);
+
+      if (klass.class.reopen) {
+        klass.class.reopen(changes);
+      } else {
+        Object.defineProperties(
+          klass.class.prototype || klass.class,
+          Object.getOwnPropertyDescriptors(changes)
+        );
+      }
     }
 
     return klass;
@@ -397,7 +439,7 @@ class PluginApi {
    * ```
    **/
   addPosterIcons(cb) {
-    const site = this._lookupContainer("site:main");
+    const site = this._lookupContainer("service:site");
     const loc = site && site.mobileView ? "before" : "after";
 
     decorateWidget(`poster-name:${loc}`, (dec) => {
@@ -477,7 +519,50 @@ class PluginApi {
    *
    **/
   decorateWidget(name, fn) {
+    this._deprecateDecoratingHamburgerWidgetLinks(name, fn);
     decorateWidget(name, fn);
+  }
+
+  _deprecateDecoratingHamburgerWidgetLinks(name, fn) {
+    if (
+      name === "hamburger-menu:generalLinks" ||
+      name === "hamburger-menu:footerLinks"
+    ) {
+      const siteSettings = this.container.lookup("service:site-settings");
+
+      if (siteSettings.navigation_menu !== "legacy") {
+        try {
+          const { href, route, label, rawLabel, className } = fn();
+          const textContent = rawLabel || I18n.t(label);
+
+          const args = {
+            name: className || textContent.replace(/\s+/g, "-").toLowerCase(),
+            title: textContent,
+            text: textContent,
+          };
+
+          if (href) {
+            if (DiscourseURL.isInternal(href)) {
+              args.href = href;
+            } else {
+              // Skip external links support for now
+              return;
+            }
+          } else {
+            args.route = route;
+          }
+
+          this.addCommunitySectionLink(args, name.match(/footerLinks/));
+        } catch {
+          deprecated(
+            `Usage of \`api.decorateWidget('hamburger-menu:generalLinks')\` is incompatible with the \`navigation_menu\` site setting when not set to "legacy". Please use \`api.addCommunitySectionLink\` instead.`,
+            { id: "discourse.decorate-widget.hamburger-widget-links" }
+          );
+        }
+
+        return;
+      }
+    }
   }
 
   /**
@@ -495,7 +580,17 @@ class PluginApi {
   attachWidgetAction(widget, actionName, fn) {
     const widgetClass =
       queryRegistry(widget) ||
-      this.container.factoryFor(`widget:${widget}`).class;
+      this.container.factoryFor(`widget:${widget}`)?.class;
+
+    if (!widgetClass) {
+      // eslint-disable-next-line no-console
+      console.error(
+        consolePrefix(),
+        `attachWidgetAction: Could not find widget ${widget} in registry`
+      );
+      return;
+    }
+
     widgetClass.prototype[actionName] = fn;
   }
 
@@ -560,6 +655,26 @@ class PluginApi {
    **/
   removePostMenuButton(name, callback) {
     removeButton(name, callback);
+  }
+
+  /**
+   * Replace an existing button with a widget
+   *
+   * Example:
+   * ```
+   * api.replacePostMenuButton("like", {
+   *   name: "widget-name",
+   *   buildAttrs: (widget) => {
+   *     return { post: widget.findAncestorModel() };
+   *   },
+   *   shouldRender: (widget) => {
+   *     const post = widget.findAncestorModel();
+   *     return post.id === 1
+   *   }
+   * });
+   **/
+  replacePostMenuButton(name, widget) {
+    replaceButton(name, widget);
   }
 
   /**
@@ -738,7 +853,8 @@ class PluginApi {
 
   addFlagProperty() {
     deprecated(
-      "addFlagProperty has been removed. Use the reviewable API instead."
+      "addFlagProperty has been removed. Use the reviewable API instead.",
+      { id: "discourse.add-flag-property" }
     );
   }
 
@@ -868,6 +984,22 @@ class PluginApi {
   }
 
   /**
+   * Adds a callback to be called before rendering any small action post
+   * that returns custom classes to add to the small action post
+   *
+   * ```javascript
+   * addPostSmallActionClassesCallback(post => {
+   *   if (post.actionCode.includes("group")) {
+   *     return ["group-small-post"];
+   *   }
+   * });
+   * ```
+   **/
+  addPostSmallActionClassesCallback(callback) {
+    addPostSmallActionClassesCallback(callback);
+  }
+
+  /**
    * Register an additional query param with topic discovery,
    * this allows for filters on the topic list
    *
@@ -895,7 +1027,7 @@ class PluginApi {
   }
 
   /**
-   * Adds a glyph to user menu after bookmarks
+   * Adds a glyph to the legacy user menu after bookmarks
    * WARNING: there is limited space there
    *
    * example:
@@ -907,9 +1039,13 @@ class PluginApi {
    *    data: { url: `/some/path` },
    * });
    *
+   * To customize the new user menu, see api.registerUserMenuTab
    */
-  addUserMenuGlyph(glyph) {
-    addUserMenuGlyph(glyph);
+  addUserMenuGlyph() {
+    deprecated(
+      "addUserMenuGlyph has been removed. Use api.registerUserMenuTab instead.",
+      { id: "discourse.add-user-menu-glyph" }
+    );
   }
 
   /**
@@ -982,7 +1118,7 @@ class PluginApi {
    *   customFilter: (category, args, router) => { return category && category.name !== 'bug' }
    *   customHref: (category, args, router) => {  if (category && category.name) === 'not-a-bug') return "/a-feature"; },
    *   before: "top",
-   *   forceActive(category, args, router) => router.currentURL === "/a/b/c/d";
+   *   forceActive: (category, args, router) => router.currentURL === "/a/b/c/d",
    * })
    */
   addNavigationBarItem(item) {
@@ -1171,15 +1307,39 @@ class PluginApi {
   /**
    * Registers a "beforeSave" function on the composer. This allows you to
    * implement custom logic that will happen before the user makes a post.
+   * The passed function is expected to return a promise.
    *
    * Example:
    *
    * api.composerBeforeSave(() => {
-   *   console.log("Before saving, do something!");
+   *   return new Promise(() => {
+   *     console.log("Before saving, do something!")
+   *   })
    * })
    */
   composerBeforeSave(method) {
     Composer.reopen({ beforeSave: method });
+  }
+
+  /**
+   * Registers a callback function to handle the composer save errors.
+   * This allows you to implement custom logic that will happen before
+   * the raw error is presented to the user.
+   * The passed function is expected to return true if the error was handled,
+   * false otherwise.
+   *
+   * Example:
+   *
+   * api.addComposerSaveErrorCallback((error) => {
+   *   if (error == "my_error") {
+   *      //handle error
+   *      return true;
+   *   }
+   *   return false;
+   * })
+   */
+  addComposerSaveErrorCallback(callback) {
+    addComposerSaveErrorCallback(callback);
   }
 
   /**
@@ -1325,6 +1485,26 @@ class PluginApi {
   }
 
   /**
+   * Registers custom HighlightJS plugins.
+   *
+   * See https://highlightjs.readthedocs.io/en/latest/plugin-api.html
+   * for instructions on how to define a new plugin for HighlightJS.
+   * This API exposes the Function Based Plugins interface
+   *
+   * Example:
+   *
+   * let aPlugin = {
+       'after:highlightElement': ({ el, result, text }) => {
+         console.log(el);
+       }
+     }
+   * api.registerHighlightJSPlugin(aPlugin);
+   **/
+  registerHighlightJSPlugin(plugin) {
+    registerHighlightJSPlugin(plugin);
+  }
+
+  /**
    * Adds global notices to display.
    *
    * Example:
@@ -1431,7 +1611,7 @@ class PluginApi {
    *
    **/
   addQuickAccessProfileItem(item) {
-    addQuickAccessProfileItem(item);
+    addUserMenuProfileTabItem(item);
   }
 
   addFeaturedLinkMetaDecorator(decorator) {
@@ -1513,6 +1693,7 @@ class PluginApi {
    */
   addSearchSuggestion(value) {
     addSearchSuggestion(value);
+    addGlimmerSearchSuggestion(value);
   }
 
   /**
@@ -1533,6 +1714,25 @@ class PluginApi {
   }
 
   /**
+   * Add a function to be called when there is a keyDown even on the search-menu widget.
+   * This function runs before the default logic, and if one callback returns a falsey value
+   * the logic chain will stop, to prevent the core behavior from occurring.
+   *
+   * Example usage:
+   * ```
+   * api.addSearchMenuOnKeyDownCallback((searchMenu, event) => {
+   *  if (searchMenu.term === "stop") {
+   *    return false;
+   *  }
+   * });
+   * ```
+   *
+   */
+  addSearchMenuOnKeyDownCallback(fn) {
+    addOnKeyDownCallback(fn);
+  }
+
+  /**
    * Add a quick search tip shown randomly when the search dropdown is invoked on desktop.
    *
    * Example usage:
@@ -1549,6 +1749,19 @@ class PluginApi {
    */
   addQuickSearchRandomTip(tip) {
     addQuickSearchRandomTip(tip);
+  }
+
+  /**
+   * Remove the default quick search tips shown randomly when the search dropdown is invoked on desktop.
+   *
+   * Usage:
+   * ```
+   * api.removeDefaultQuickSearchRandomTips();
+   * ```
+   *
+   */
+  removeDefaultQuickSearchRandomTips(tip) {
+    removeDefaultQuickSearchRandomTips(tip);
   }
 
   /**
@@ -1625,20 +1838,19 @@ class PluginApi {
   }
 
   /**
-   * EXPERIMENTAL. Do not use.
-   * Support for adding a link under Sidebar topics section by returning a class which extends from the BaseSectionLink
-   * class interface. See `lib/sidebar/topics-section/base-section-link.js` for documentation on the BaseSectionLink class
-   * interface.
+   * Support for adding a navigation link to Sidebar Community section under the "More..." links drawer by returning a
+   * class which extends from the BaseSectionLink class interface. See `lib/sidebar/user/community-section/base-section-link.js`
+   * for documentation on the BaseSectionLink class interface.
    *
    * ```
-   * api.addTopicsSectionLink((baseSectionLink) => {
+   * api.addCommunitySectionLink((baseSectionLink) => {
    *   return class CustomSectionLink extends baseSectionLink {
    *     get name() {
-   *       returns "bookmarked";
+   *       return "bookmarked";
    *     }
    *
    *     get route() {
-   *       returns "userActivity.bookmarks";
+   *       return "userActivity.bookmarks";
    *     }
    *
    *     get model() {
@@ -1659,7 +1871,7 @@ class PluginApi {
    * or
    *
    * ```
-   * api.addTopicsSectionLink({
+   * api.addCommunitySectionLink({
    *   name: "unread",
    *   route: "discovery.unread",
    *   title: I18n.t("some.unread.title"),
@@ -1667,18 +1879,543 @@ class PluginApi {
    * })
    * ```
    *
-   * @callback addTopicsSectionLinkCallback
+   * @callback addCommunitySectionLinkCallback
    * @param {BaseSectionLink} baseSectionLink - Factory class to inherit from.
    * @returns {BaseSectionLink} - A class that extends BaseSectionLink.
    *
-   * @param {(addTopicsSectionLinkCallback|Object)} arg - A callback function or an Object.
+   * @param {(addCommunitySectionLinkCallback|Object)} arg - A callback function or an Object.
    * @param {string} arg.name - The name of the link. Needs to be dasherized and lowercase.
-   * @param {string} arg.route - The Ember route of the link.
    * @param {string} arg.title - The title attribute for the link.
    * @param {string} arg.text - The text to display for the link.
+   * @param {string} [arg.route] - The Ember route name to generate the href attribute for the link.
+   * @param {string} [arg.href] - The href attribute for the link.
+   * @param {string} [arg.icon] - The FontAwesome icon to display for the link.
+   * @param {Boolean} [secondary] - Determines whether the section link should be added to the main or secondary section in the "More..." links drawer.
    */
-  addTopicsSectionLink(arg) {
-    addSectionLink(arg);
+  addCommunitySectionLink(arg, secondary) {
+    addCustomCommunitySectionLink(arg, secondary);
+  }
+
+  /**
+   * Registers a new countable for section links under Sidebar Categories section on top of the default countables of
+   * unread topics count and new topics count.
+   *
+   * ```
+   * api.registerUserCategorySectionLinkCountable({
+   *   badgeTextFunction: (count) => {
+   *     return I18n.t("custom.open_count", count: count");
+   *   },
+   *   route: "discovery.openCategory",
+   *   shouldRegister: ({ category } => {
+   *     return category.custom_fields.enable_open_topics_count;
+   *   }),
+   *   refreshCountFunction: ({ _topicTrackingState, category } => {
+   *     return category.open_topics_count;
+   *   }),
+   *   prioritizeDefaults: ({ currentUser, category } => {
+   *     return category.custom_fields.show_open_topics_count_first;
+   *   })
+   * })
+   * ```
+   *
+   * @callback badgeTextFunction
+   * @param {Integer} count - The count as given by the `refreshCountFunction`.
+   * @returns {String} - Text for the badge displayed in the section link.
+   *
+   * @callback shouldRegister
+   * @param {Object} arg
+   * @param {Category} arg.category - The category model for the sidebar section link.
+   * @returns {Boolean} - Whether the countable should be registered for the sidebar section link.
+   *
+   * @callback refreshCountFunction
+   * @param {Object} arg
+   * @param {Category} arg.category - The category model for the sidebar section link.
+   * @returns {integer} - The value used to set the property for the count.
+   *
+   * @callback prioritizeOverDefaults
+   * @param {Object} arg
+   * @param {Category} arg.category - The category model for the sidebar section link.
+   * @param {User} arg.currentUser - The user model for the current user.
+   * @returns {boolean} - Whether the countable should be prioritized over the defaults.
+   *
+   * @param {Object} arg - An object
+   * @param {string} arg.badgeTextFunction - Function used to generate the text for the badge displayed in the section link.
+   * @param {string} arg.route - The Ember route name to generate the href attribute for the link.
+   * @param {Object} [arg.routeQuery] - Object representing the query params that should be appended to the route generated.
+   * @param {shouldRegister} arg.shouldRegister - Function used to determine if the countable should be registered for the category.
+   * @param {refreshCountFunction} arg.refreshCountFunction - Function used to calculate the value used to set the property for the count whenever the sidebar section link refreshes.
+   * @param {prioritizeOverDefaults} args.prioritizeOverDefaults - Function used to determine whether the countable should be prioritized over the default countables of unread/new.
+   */
+  registerUserCategorySectionLinkCountable({
+    badgeTextFunction,
+    route,
+    routeQuery,
+    shouldRegister,
+    refreshCountFunction,
+    prioritizeOverDefaults,
+  }) {
+    registerUserCategorySectionLinkCountable({
+      badgeTextFunction,
+      route,
+      routeQuery,
+      shouldRegister,
+      refreshCountFunction,
+      prioritizeOverDefaults,
+    });
+  }
+
+  /**
+   * Changes the lock icon used for a sidebar category section link to indicate that a category is read restricted.
+   *
+   * @param {String} Name of a FontAwesome 5 icon
+   */
+  registerCustomCategorySectionLinkLockIcon(icon) {
+    return registerCustomCategoryLockIcon(icon);
+  }
+
+  /**
+   * Register a custom prefix for a sidebar category section link.
+   *
+   * Example:
+   *
+   * ```
+   * api.registerCustomCategorySectionLinkPrefix({
+   *   categoryId: category.id,
+   *   prefixType: "icon",
+   *   prefixValue: "wrench",
+   *   prefixColor: "FF0000"
+   * })
+   * ```
+   *
+   * @param {Object} arg - An object
+   * @param {string} arg.categoryId - The id of the category
+   * @param {string} arg.prefixType - The type of prefix to use. Can be "icon", "image", "text" or "span".
+   * @param {string} arg.prefixValue - The value of the prefix to use.
+   *                                    For "icon", pass in the name of a FontAwesome 5 icon.
+   *                                    For "image", pass in the src of the image.
+   *                                    For "text", pass in the text to display.
+   *                                    For "span", pass in an array containing two hex color values. Example: `[FF0000, 000000]`.
+   * @param {string} arg.prefixColor - The color of the prefix to use. Example: "FF0000".
+   */
+  registerCustomCategorySectionLinkPrefix({
+    categoryId,
+    prefixType,
+    prefixValue,
+    prefixColor,
+  }) {
+    registerCustomCategorySectionLinkPrefix({
+      categoryId,
+      prefixType,
+      prefixValue,
+      prefixColor,
+    });
+  }
+
+  /**
+   * Register a custom prefix for a sidebar tag section link.
+   *
+   * Example:
+   *
+   * ```
+   * api.registerCustomTagSectionLinkPrefixValue({
+   *   tagName: "tag1",
+   *   prefixType: "icon",
+   *   prefixValue: "wrench",
+   *   prefixColor: "#FF0000"
+   * });
+   * ```
+   *
+   * @param {Object} arg - An object
+   * @param {string} arg.tagName - The name of the tag
+   * @param {string} arg.prefixValue - The name of a FontAwesome 5 icon.
+   * @param {string} arg.prefixColor - The color represented using hexadecimal to use for the prefix. Example: "#FF0000" or "#FFF".
+   */
+  registerCustomTagSectionLinkPrefixIcon({
+    tagName,
+    prefixValue,
+    prefixColor,
+  }) {
+    registerCustomTagSectionLinkPrefixIcon({
+      tagName,
+      prefixValue,
+      prefixColor,
+    });
+  }
+
+  /**
+   * Triggers a refresh of the counts for all category section links under the categories section for a logged in user.
+   */
+  refreshUserSidebarCategoriesSectionCounts() {
+    const appEvents = this._lookupContainer("service:app-events");
+
+    appEvents?.trigger(
+      REFRESH_USER_SIDEBAR_CATEGORIES_SECTION_COUNTS_APP_EVENT_NAME
+    );
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Support for adding a Sidebar panel by returning a class which extends from the BaseCustomSidebarPanel
+   * class interface. See `lib/sidebar/user/base-custom-sidebar-panel.js` for documentation on the BaseCustomSidebarPanel class
+   * interface.
+   *
+   * ```
+   * api.addSidebarPanel((BaseCustomSidebarPanel) => {
+   *   const ChatSidebarPanel = class extends BaseCustomSidebarPanel {
+   *     get key() {
+   *       return "chat";
+   *     }
+   *     get switchButtonLabel() {
+   *       return I18n.t("sidebar.panels.chat.label");
+   *     }
+   *     get switchButtonIcon() {
+   *       return "d-chat";
+   *     }
+   *     get switchButtonDefaultUrl() {
+   *       return "/chat";
+   *     }
+   *   };
+   *   return ChatSidebarPanel;
+   * });
+   * ```
+   */
+  addSidebarPanel(func) {
+    addSidebarPanel(func);
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Support for setting a Sidebar panel.
+   */
+  setSidebarPanel(name) {
+    this._lookupContainer("service:sidebar-state").setPanel(name);
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Set combined sidebar section mode. In this mode, sections from all panels are displayed together.
+   */
+  setCombinedSidebarMode() {
+    this._lookupContainer("service:sidebar-state").setCombinedMode();
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Set separated sidebar section mode. In this mode, only sections from the current panel are displayed.
+   */
+  setSeparatedSidebarMode() {
+    this._lookupContainer("service:sidebar-state").setSeparatedMode();
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Show sidebar switch panels buttons in separated mode.
+   */
+  showSidebarSwitchPanelButtons() {
+    this._lookupContainer("service:sidebar-state").showSwitchPanelButtons();
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Hide sidebar switch panels buttons in separated mode.
+   */
+  hideSidebarSwitchPanelButtons() {
+    this._lookupContainer("service:sidebar-state").hideSwitchPanelButtons();
+  }
+
+  /**
+   * Support for adding a Sidebar section by returning a class which extends from the BaseCustomSidebarSection
+   * class interface. See `lib/sidebar/user/base-custom-sidebar-section.js` for documentation on the BaseCustomSidebarSection class
+   * interface.
+   *
+   * ```
+   * api.addSidebarSection((BaseCustomSidebarSection, BaseCustomSidebarSectionLink) => {
+   *   return class extends BaseCustomSidebarSection {
+   *     get name() {
+   *       return "chat-channels";
+   *     }
+   *
+   *     get route() {
+   *       return "chat";
+   *     }
+   *
+   *     get title() {
+   *       return I18n.t("sidebar.sections.chat.title");
+   *     }
+   *
+   *     get text() {
+   *       return I18n.t("sidebar.sections.chat.text");
+   *     }
+   *
+   *     get actionsIcon() {
+   *       return "cog";
+   *     }
+   *
+   *     get actions() {
+   *       return [
+   *         { id: "browseChannels", title: "Browse channel", action: () => {} },
+   *         { id: "settings", title: "Settings", action: () => {} },
+   *       ];
+   *     }
+   *
+   *     get links() {
+   *       return [
+   *         new (class extends BaseCustomSidebarSectionLink {
+   *           get name() {
+   *             "dev"
+   *           }
+   *           get route() {
+   *             return "chat.channel";
+   *           }
+   *           get model() {
+   *             return {
+   *               channelId: "1",
+   *               channelTitle: "dev channel"
+   *             };
+   *           }
+   *           get title() {
+   *             return "dev channel";
+   *           }
+   *           get text() {
+   *             return "dev channel";
+   *           }
+   *           get prefixValue() {
+   *             return "icon";
+   *           }
+   *           get prefixValue() {
+   *             return "hashtag";
+   *           }
+   *           get prefixColor() {
+   *             return "000000";
+   *           }
+   *           get prefixBadge() {
+   *             return "lock";
+   *           }
+   *           get suffixType() {
+   *             return "icon";
+   *           }
+   *           get suffixValue() {
+   *             return "circle";
+   *           }
+   *           get suffixCSSClass() {
+   *             return "unread";
+   *           }
+   *         })(),
+   *         new (class extends BaseCustomSidebarSectionLink {
+   *           get name() {
+   *             "random"
+   *           }
+   *           get route() {
+   *             return "chat.channel";
+   *           }
+   *           get model() {
+   *             return {
+   *               channelId: "2",
+   *               channelTitle: "random channel"
+   *             };
+   *           }
+   *           get currentWhen() {
+   *             return true;
+   *           }
+   *           get title() {
+   *             return "random channel";
+   *           }
+   *           get text() {
+   *             return "random channel";
+   *           }
+   *           get hoverType() {
+   *             return "icon";
+   *           }
+   *           get hoverValue() {
+   *             return "times";
+   *           }
+   *           get hoverAction() {
+   *             return () => {};
+   *           }
+   *           get hoverTitle() {
+   *             return "button title attribute"
+   *           }
+   *         })()
+   *       ];
+   *     }
+   *   }
+   * })
+   * ```
+   */
+  addSidebarSection(func, panelKey = "main") {
+    addSidebarSection(func, panelKey);
+  }
+
+  /**
+   * Register a custom renderer for a notification type or override the
+   * renderer of an existing type. See lib/notification-types/base.js for
+   * documentation and the default renderer.
+   *
+   * ```
+   * api.registerNotificationTypeRenderer("your_notification_type", (NotificationTypeBase) => {
+   *   return class extends NotificationTypeBase {
+   *     get label() {
+   *       return "some label";
+   *     }
+   *
+   *     get description() {
+   *       return "fancy description";
+   *     }
+   *   };
+   * });
+   * ```
+   * @callback renderDirectorRegistererCallback
+   * @param {NotificationTypeBase} The base class from which the returned class should inherit.
+   * @returns {NotificationTypeBase} A class that inherits from NotificationTypeBase.
+   *
+   * @param {string} notificationType - ID of the notification type (i.e. the key value of your notification type in the `Notification.types` enum on the server side).
+   * @param {renderDirectorRegistererCallback} func - Callback function that returns a subclass from the class it receives as its argument.
+   */
+  registerNotificationTypeRenderer(notificationType, func) {
+    registerNotificationTypeRenderer(notificationType, func);
+  }
+
+  /**
+   * Registers a new tab in the user menu. This API method expects a callback
+   * that should return a class inheriting from the class (UserMenuTab) that's
+   * passed to the callback. See discourse/app/lib/user-menu/tab.js for
+   * documentation of UserMenuTab.
+   *
+   * ```
+   * api.registerUserMenuTab((UserMenuTab) => {
+   *   return class extends UserMenuTab {
+   *     id = "custom-tab-id";
+   *     panelComponent = MyCustomPanelGlimmerComponent;
+   *     icon = "some-fa5-icon";
+   *
+   *     get shouldDisplay() {
+   *       return this.siteSettings.enable_custom_tab && this.currentUser.admin;
+   *     }
+   *
+   *     get count() {
+   *       return this.currentUser.my_custom_notification_count;
+   *     }
+   *   }
+   * });
+   * ```
+   *
+   * @callback customTabRegistererCallback
+   * @param {UserMenuTab} The base class from which the returned class should inherit.
+   * @returns {UserMenuTab} A class that inherits from UserMenuTab.
+   *
+   * @param {customTabRegistererCallback} func - Callback function that returns a subclass from the class it receives as its argument.
+   */
+  registerUserMenuTab(func) {
+    registerUserMenuTab(func);
+  }
+
+  /**
+   * Apply transformation using a callback on a list of model instances of a
+   * specific type. Currently, this API only works on lists rendered in the
+   * user menu such as notifications, bookmarks and topics (i.e. messages), but
+   * it may be extended to other lists in other parts of the app.
+   *
+   * You can pass an `async` callback to this API and it'll be `await`ed and
+   * block rendering until the callback finishes executing.
+   *
+   * ```
+   * api.registerModelTransformer("topic", async (topics) => {
+   *   for (const topic of topics) {
+   *     const decryptedTitle = await decryptTitle(topic.encrypted_title);
+   *     if (decryptedTitle) {
+   *       topic.fancy_title = decryptedTitle;
+   *     }
+   *   }
+   * });
+   * ```
+   *
+   * @callback registerModelTransformerCallback
+   * @param {Object[]} A list of model instances
+   *
+   * @param {string} modelName - Model type on which transformation should be applied. Currently valid types are "topic", "notification" and "bookmark".
+   * @param {registerModelTransformerCallback} transformer - Callback function that receives a list of model objects of the specified type and applies transformation on them.
+   */
+  registerModelTransformer(modelName, transformer) {
+    registerModelTransformer(modelName, transformer);
+  }
+
+  /**
+   * Adds a row to the dropdown used on the `userPrivateMessages` route used to navigate between the different user
+   * messages pages.
+   *
+   * @param {string} routeName The Ember route name to transition to when the row is selected in the dropdown
+   * @param {string} name The text displayed to represent the row in the dropdown
+   * @param {string} [icon] The name of the icon that will be used when displaying the row in the dropdown
+   */
+  addUserMessagesNavigationDropdownRow(routeName, name, icon) {
+    registerCustomUserNavMessagesDropdownRow(routeName, name, icon);
+  }
+
+  /**
+   * EXPERIMENTAL. Do not use.
+   * Adds a new search type which can be selected when visiting the full page search UI.
+   *
+   * @param {string} translationKey
+   * @param {string} searchTypeId
+   * @param {function} searchFunc - Available arguments: fullPage controller, search args, searchKey.
+   */
+  addFullPageSearchType(translationKey, searchTypeId, searchFunc) {
+    registerFullPageSearchType(translationKey, searchTypeId, searchFunc);
+  }
+
+  /**
+   * Registers a hashtag type and its corresponding class.
+   * This is used when generating CSS classes in the hashtag-css-generator.
+   *
+   * @param {string} type - The type of the hashtag.
+   * @param {Class} typeClassInstance - The initialized class of the hashtag type, which
+   *  needs the `container`.
+   */
+  registerHashtagType(type, typeClassInstance) {
+    registerHashtagType(type, typeClassInstance);
+  }
+
+  /**
+   * Adds a button to the bulk topic actions modal.
+   *
+   * ```
+   * api.addBulkActionButton({
+   *   label: "super_plugin.bulk.enhance",
+   *   icon: "magic",
+   *   class: "btn-default",
+   *   visible: ({ currentUser, siteSettings }) => siteSettings.super_plugin_enabled && currentUser.staff,
+   *   async action({ setComponent }) {
+   *     await doSomething(this.model.topics);
+   *     setComponent(MyBulkModal);
+   *   },
+   * });
+   * ```
+   *
+   * @callback buttonVisibilityCallback
+   * @param {Object} opts
+   * @param {Topic[]} opts.topics - the selected topic for the bulk action
+   * @param {Category} opts.category - the category in which the action is performed (if applicable)
+   * @param {User} opts.currentUser
+   * @param {SiteSettings} opts.siteSettings
+   * @returns {Boolean} - whether the button should be visible or not
+   *
+   * @callback buttonAction
+   * @param {Object} opts
+   * @param {Topic[]} opts.topics - the selected topic for the bulk action
+   * @param {Category} opts.category - the category in which the action is performed (if applicable)
+   * @param {function} opts.setComponent - render a template in the bulk action modal (pass in an imported component)
+   * @param {function} opts.performAndRefresh
+   * @param {function} opts.forEachPerformed
+   *
+   * @param {Object} opts
+   * @param {string} opts.label
+   * @param {string} opts.icon
+   * @param {string} opts.class
+   * @param {buttonVisibilityCallback} opts.visible
+   * @param {buttonAction} opts.action
+   */
+  addBulkActionButton(opts) {
+    _addBulkButton(opts);
   }
 }
 

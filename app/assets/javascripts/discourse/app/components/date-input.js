@@ -52,7 +52,9 @@ export default Component.extend({
         this._picker = picker;
 
         if (this._picker && this.date) {
-          this._picker.setDate(moment(this.date).toDate(), true);
+          const parsedDate =
+            this.date instanceof moment ? this.date : moment(this.date);
+          this._picker.setDate(parsedDate, true);
         }
       });
     });
@@ -62,11 +64,18 @@ export default Component.extend({
     this._super(...arguments);
 
     if (this._picker && this.date) {
-      this._picker.setDate(moment(this.date).toDate(), true);
+      const parsedDate =
+        this.date instanceof moment ? this.date : moment(this.date);
+      this._picker.setDate(parsedDate, true);
     }
 
     if (this._picker && this.relativeDate) {
-      this._picker.setMinDate(moment(this.relativeDate).toDate(), true);
+      const parsedRelativeDate =
+        this.relativeDate instanceof moment
+          ? this.relativeDate
+          : moment(this.relativeDate);
+
+      this._picker.setMinDate(parsedRelativeDate, true);
     }
 
     if (this._picker && !this.date) {
@@ -93,12 +102,10 @@ export default Component.extend({
       };
 
       if (this.relativeDate) {
-        defaultOptions = Object.assign({}, defaultOptions, {
-          minDate: moment(this.relativeDate).toDate(),
-        });
+        defaultOptions.minDate = moment(this.relativeDate).toDate();
       }
 
-      return new Pikaday(Object.assign({}, defaultOptions, this._opts()));
+      return new Pikaday({ ...defaultOptions, ...this._opts() });
     });
   },
 

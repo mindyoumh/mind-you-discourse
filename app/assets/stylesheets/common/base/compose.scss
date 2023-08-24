@@ -1,10 +1,6 @@
-:root {
-  --reply-composer-height: 300px;
-  --new-topic-composer-height: 400px;
-}
 html.composer-open {
   #main-outlet {
-    padding-bottom: var(--reply-composer-height);
+    padding-bottom: var(--composer-height);
     transition: padding-bottom 250ms ease;
   }
 }
@@ -20,9 +16,19 @@ html.composer-open {
   margin-right: auto;
   max-width: $reply-area-max-width;
   width: 100%;
+
   &.hide-preview {
     max-width: 740px;
   }
+
+  &:has(.has-form-template) {
+    max-width: 740px;
+
+    .toggle-preview {
+      display: none;
+    }
+  }
+
   @media screen and (max-width: 1200px) {
     min-width: 0;
   }
@@ -30,7 +36,7 @@ html.composer-open {
   transition: height 250ms ease, background 250ms ease, transform 250ms ease,
     max-width 250ms ease, padding-bottom 250ms ease;
   background-color: var(--secondary);
-  box-shadow: shadow("composer");
+  box-shadow: var(--shadow-composer);
 
   .reply-area {
     display: flex;
@@ -53,11 +59,7 @@ html.composer-open {
   }
 
   &.open {
-    height: var(--reply-composer-height);
-    &.edit-title {
-      // more room when editing the title
-      height: var(--new-topic-composer-height);
-    }
+    height: var(--composer-height);
   }
 
   &.closed {
@@ -98,9 +100,6 @@ html.composer-open {
     .saving-text {
       display: none;
     }
-    .toggle-minimize {
-      order: 2;
-    }
   }
 
   &.saving .saving-text {
@@ -130,20 +129,20 @@ html.composer-open {
       align-items: center;
       width: auto;
       max-width: 100%;
-
-      .avatar {
-        width: 20px;
-      }
+      min-width: 0; // allows shrinking when needed
 
       .action-title {
+        display: flex;
+        align-items: center;
         line-height: normal;
-        @include ellipsis;
-      }
+        min-width: 0;
 
-      .topic-link,
-      .user-link,
-      .post-link {
-        margin-right: 8px;
+        .topic-link,
+        .user-link,
+        .post-link {
+          margin-right: 8px;
+          @include ellipsis;
+        }
       }
 
       .username {
@@ -171,10 +170,6 @@ html.composer-open {
 
       .d-icon {
         color: var(--primary-medium);
-      }
-
-      .toggle-minimize {
-        order: 2;
       }
     }
   }
@@ -260,6 +255,10 @@ html.composer-open {
         text-overflow: ellipsis;
       }
 
+      .select-kit-body {
+        max-width: 450px;
+      }
+
       // below needed for text-overflow: ellipsis;
       .selected-name {
         max-width: 100%;
@@ -281,7 +280,7 @@ html.composer-open {
     }
   }
 
-  .with-tags {
+  .with-tags.with-category {
     .title-and-category {
       flex-wrap: wrap;
     }
@@ -316,12 +315,15 @@ html.composer-open {
     }
   }
 
+  .category-input + .mini-tag-chooser {
+    margin-left: 8px;
+    width: unset;
+  }
+
   .mini-tag-chooser {
     flex-grow: 1;
-    max-width: calc(50% - 4px);
-    margin: 0 0 8px 8px;
+    margin: 0 0 8px 0px;
     z-index: z("composer", "dropdown");
-
     .select-kit-header {
       color: var(--primary-high);
     }
@@ -345,7 +347,8 @@ html.composer-open {
   .save-or-cancel {
     align-items: center;
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
+    margin-right: 1em;
 
     .btn-primary {
       flex: 0 0 auto;
@@ -366,77 +369,156 @@ html.composer-open {
       }
     }
 
-    #draft-status,
-    #file-uploading {
-      margin-left: 25px;
-    }
-    #file-uploading {
-      display: flex;
-      align-items: center;
-      a {
-        margin-left: 5px;
-        color: var(--primary-high);
-      }
-      .spinner {
-        margin-right: 5px;
-      }
-    }
-    #draft-status .d-icon-user-edit {
-      color: var(--danger);
-      font-size: 20px;
-      vertical-align: -5.5px;
+    .preview-template {
+      margin-left: 0.5rem;
     }
   }
 
   #draft-status,
   #file-uploading {
     color: var(--primary-high);
+    margin-right: 0.5em;
+  }
+
+  #file-uploading {
+    display: flex;
+    align-items: center;
+    margin-right: auto;
+    a {
+      margin-left: 0.33em;
+      color: var(--primary-high);
+    }
+    .spinner {
+      margin-right: 0.33em;
+    }
+  }
+
+  #draft-status {
+    margin-left: auto;
+    .d-icon-user-edit {
+      color: var(--danger);
+      font-size: 20px;
+      vertical-align: -5.5px;
+    }
+    + .btn-mini-toggle {
+      margin-left: 0;
+    }
   }
 
   #file-uploader {
     display: none;
+  }
+
+  .composer-select-form-template {
+    margin-bottom: 8px;
+    width: 100%;
+
+    .name,
+    .formatted-selection,
+    .d-icon {
+      color: var(--primary-high);
+    }
   }
 }
 
 .autocomplete {
   z-index: z("composer", "dropdown") + 1;
   position: absolute;
-  width: 240px;
+  max-width: 300px;
+  width: 300px;
   background-color: var(--secondary);
   border: 1px solid var(--primary-low);
+  box-shadow: var(--shadow-dropdown);
+  border-radius: 8px;
+
   ul {
     list-style: none;
     padding: 0;
     margin: 0;
 
     li {
+      &:first-of-type a {
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+      }
+      &:last-of-type a {
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+      }
+      a {
+        @include ellipsis;
+        align-items: center;
+        color: var(--primary);
+        display: flex;
+        gap: 0.25em;
+        padding: 0.3em 1em;
+
+        @include hover {
+          background-color: var(--d-hover);
+          text-decoration: none;
+        }
+
+        &.selected {
+          background-color: var(--d-selected);
+
+          .username,
+          .name,
+          .emoji-shortname {
+            font-weight: bold;
+          }
+        }
+
+        .avatar {
+          margin-right: 0.25em;
+        }
+
+        .name {
+          display: contents;
+          font-size: var(--font-down-1);
+          color: var(--primary-high);
+        }
+
+        .user-status-message {
+          display: flex;
+          align-items: center;
+          gap: 0.25em;
+
+          .user-status-message-description {
+            @include ellipsis;
+            font-size: var(--font-down-2);
+            color: var(--primary-high);
+            margin: 0;
+          }
+        }
+
+        .relative-date {
+          font-size: var(--font-down-3);
+        }
+      }
+
       .d-icon-users {
         color: var(--primary-medium);
         padding: 0 2px;
       }
+    }
+  }
 
-      border-bottom: 1px solid var(--primary-low);
+  &.ac-user {
+    li a {
+      padding: 0.5em 1em;
+    }
+    .emoji {
+      height: 0.75em;
+      width: 0.75em;
+    }
+  }
 
-      a {
-        padding: 5px;
-        display: block;
-        @include ellipsis;
-
-        span.username {
-          color: var(--primary);
-        }
-        span.name {
-          font-size: $font-down-1;
-          vertical-align: middle;
-        }
-        &.selected {
-          background-color: var(--tertiary-low);
-        }
-        @include hover {
-          background-color: var(--highlight-low);
-          text-decoration: none;
-        }
-      }
+  &.ac-emoji {
+    li:last-of-type a {
+      color: var(--primary-high);
+    }
+    .emoji {
+      margin-right: 0.25em;
     }
   }
 }
@@ -453,8 +535,8 @@ div.ac-wrap.disabled {
 div.ac-wrap div.item a.remove,
 .remove-link {
   margin-left: 4px;
-  font-size: $font-down-1;
-  line-height: $line-height-small;
+  font-size: var(--font-down-1);
+  line-height: var(--line-height-small);
   padding: 1px 3.5px;
   border-radius: 12px;
   box-sizing: border-box;
@@ -477,10 +559,10 @@ div.ac-wrap {
   div.item {
     float: left;
     padding: 4px 10px;
-    line-height: $line-height-large;
+    line-height: var(--line-height-large);
     span {
       display: inline-block;
-      line-height: $line-height-medium;
+      line-height: var(--line-height-medium);
     }
   }
 
@@ -510,14 +592,6 @@ div.ac-wrap {
   }
 }
 
-@-webkit-keyframes transformer {
-  90% {
-    -webkit-filter: opacity(1);
-  }
-  100% {
-    -webkit-filter: opacity(0);
-  }
-}
 @keyframes transformer {
   90% {
     opacity: 1;
@@ -553,19 +627,13 @@ body:not(.ios-safari-composer-hacks) {
       min-height: calc(var(--min-height) - 4em);
     }
     padding-bottom: var(--composer-ipad-padding);
-  }
-}
-
-.show-preview {
-  @media screen and (max-width: 850px) {
-    .d-editor-button-bar {
-      font-size: $font-down-1;
-    }
+    padding-bottom: calc(10px + env(keyboard-inset-height));
+    box-sizing: border-box;
   }
 }
 
 .toggle-preview {
-  margin-left: 8px;
+  margin-left: auto;
   transition: all 0.33s ease-out;
 
   &.active {

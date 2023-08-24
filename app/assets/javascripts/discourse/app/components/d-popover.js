@@ -80,14 +80,17 @@ export default class DiscoursePopover extends Component {
       },
     };
 
-    const instance = tippy(
-      document
-        .getElementById(this.componentId)
-        .querySelector(
-          ':scope > .d-popover-trigger, :scope > .btn, :scope > [role="button"]'
-        ),
-      Object.assign({}, baseOptions, this.options || {})
-    );
+    const target = document
+      .getElementById(this.componentId)
+      .querySelector(
+        ':scope > .d-popover-trigger, :scope > .btn, :scope > [role="button"]'
+      );
+
+    if (!target) {
+      return null;
+    }
+
+    const instance = tippy(target, { ...baseOptions, ...(this.options || {}) });
 
     return instance?.id ? instance : null;
   }

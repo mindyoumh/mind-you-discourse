@@ -26,6 +26,7 @@ export function transformBasicPost(post) {
     flair_url: post.flair_url,
     flair_bg_color: post.flair_bg_color,
     flair_color: post.flair_color,
+    flair_group_id: post.flair_group_id,
     wiki: post.wiki,
     lastWikiEdit: post.last_wiki_edit,
     firstPost: post.post_number === 1,
@@ -56,8 +57,9 @@ export function transformBasicPost(post) {
     canPermanentlyDelete: false,
     showFlagDelete: false,
     canRecover: post.can_recover,
+    canSeeHiddenPost: post.can_see_hidden_post,
     canEdit: post.can_edit,
-    canFlag: !isEmpty(post.get("flagsAvailable")),
+    canFlag: !post.get("topic.deleted") && !isEmpty(post.get("flagsAvailable")),
     canReviewTopic: false,
     reviewableId: post.reviewable_id,
     reviewableScoreCount: post.reviewable_score_count,
@@ -127,8 +129,7 @@ export default function transformPost(
     postType === postTypes.small_action || post.action_code === "split_topic";
   postAtts.canBookmark = !!currentUser;
   postAtts.canManage = currentUser && currentUser.get("canManageTopic");
-  postAtts.canViewRawEmail =
-    currentUser && (currentUser.id === post.user_id || currentUser.staff);
+  postAtts.canViewRawEmail = currentUser && currentUser.staff;
   postAtts.canArchiveTopic = !!details.can_archive_topic;
   postAtts.canCloseTopic = !!details.can_close_topic;
   postAtts.canSplitMergeTopic = !!details.can_split_merge_topic;
@@ -154,6 +155,7 @@ export default function transformPost(
   postAtts.topicUrl = topic.get("url");
   postAtts.isSaving = post.isSaving;
   postAtts.staged = post.staged;
+  postAtts.user = post.user;
 
   if (post.notice) {
     postAtts.notice = post.notice;
@@ -178,7 +180,7 @@ export default function transformPost(
   }
 
   const showTopicMap =
-    _additionalAttributes.indexOf("topicMap") !== -1 ||
+    (_additionalAttributes.includes("topicMap") && post.post_number === 1) ||
     showPMMap ||
     (post.post_number === 1 &&
       topic.archetype === "regular" &&
@@ -216,7 +218,8 @@ export default function transformPost(
     postAtts.userFilters = postStream.userFilters;
     postAtts.topicSummaryEnabled = postStream.summary;
     postAtts.topicWordCount = topic.word_count;
-    postAtts.hasTopicSummary = topic.has_summary;
+    postAtts.hasTopRepliesSummary = topic.has_summary;
+    postAtts.summarizable = topic.summarizable;
   }
 
   if (postAtts.isDeleted) {
@@ -257,10 +260,11 @@ export default function transformPost(
     postAtts.canToggleLike = likeAction.get("canToggle");
     postAtts.showLike = postAtts.liked || postAtts.canToggleLike;
     postAtts.likeCount = likeAction.count;
-  }
-
-  if (!currentUser) {
-    postAtts.showLike = !topic.archived;
+  } else if (
+    !currentUser ||
+    (topic.archived && topic.user_id !== currentUser.id)
+  ) {
+    postAtts.showLike = true;
   }
 
   if (postAtts.post_number === 1) {

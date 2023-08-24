@@ -5,11 +5,8 @@ import discourseComputed, {
   observes,
   on,
 } from "discourse-common/utils/decorators";
-import {
-  emailValid,
-  escapeExpression,
-  tinyAvatar,
-} from "discourse/lib/utilities";
+import { emailValid, escapeExpression } from "discourse/lib/utilities";
+import { tinyAvatar } from "discourse-common/lib/avatar-utils";
 import Draft from "discourse/models/draft";
 import I18n from "I18n";
 import { Promise } from "rsvp";
@@ -18,11 +15,11 @@ import RestModel from "discourse/models/rest";
 import Site from "discourse/models/site";
 import Topic from "discourse/models/topic";
 import User from "discourse/models/user";
-import bootbox from "bootbox";
+import { inject as service } from "@ember/service";
 import deprecated from "discourse-common/lib/deprecated";
 import { isEmpty } from "@ember/utils";
 import { propertyNotEqual } from "discourse/lib/computed";
-import { throwAjaxError } from "discourse/lib/ajax-error";
+import { extractError, throwAjaxError } from "discourse/lib/ajax-error";
 import { prioritizeNameFallback } from "discourse/lib/settings";
 
 let _customizations = [];
@@ -119,11 +116,13 @@ export const SAVE_ICONS = {
 };
 
 const Composer = RestModel.extend({
+  dialog: service(),
   _categoryId: null,
   unlistTopic: false,
   noBump: false,
   draftSaving: false,
   draftForceSave: false,
+  showFullScreenExitPrompt: false,
 
   archetypes: reads("site.archetypes"),
 
@@ -140,8 +139,18 @@ const Composer = RestModel.extend({
     set(categoryId) {
       const oldCategoryId = this._categoryId;
 
-      if (isEmpty(categoryId)) {
+      if (this.privateMessage) {
         categoryId = null;
+      } else if (isEmpty(categoryId)) {
+        // Check if there is a default composer category to set
+        const defaultComposerCategoryId = parseInt(
+          this.siteSettings.default_composer_category,
+          10
+        );
+        categoryId =
+          defaultComposerCategoryId && defaultComposerCategoryId > 0
+            ? defaultComposerCategoryId
+            : null;
       }
       this._categoryId = categoryId;
 
@@ -303,7 +312,7 @@ const Composer = RestModel.extend({
     if (
       !categoryId &&
       categoryIds &&
-      (categoryIds.indexOf(this.site.uncategorized_category_id) !== -1 ||
+      (categoryIds.includes(this.site.uncategorized_category_id) ||
         !this.siteSettings.allow_uncategorized_topics)
     ) {
       return true;
@@ -311,7 +320,7 @@ const Composer = RestModel.extend({
     return (
       categoryIds === undefined ||
       !categoryIds.length ||
-      categoryIds.indexOf(categoryId) !== -1
+      categoryIds.includes(categoryId)
     );
   },
 
@@ -452,7 +461,9 @@ const Composer = RestModel.extend({
       const category = this.category;
       if (category && category.topic_template) {
         if (this.reply.trim() === category.topic_template.trim()) {
-          bootbox.alert(I18n.t("composer.error.topic_template_not_modified"));
+          this.dialog.alert(
+            I18n.t("composer.error.topic_template_not_modified")
+          );
           return true;
         }
       }
@@ -765,7 +776,9 @@ const Composer = RestModel.extend({
     }
 
     if (opts.usernames) {
-      deprecated("`usernames` is deprecated, use `recipients` instead.");
+      deprecated("`usernames` is deprecated, use `recipients` instead.", {
+        id: "discourse.composer.usernames",
+      });
     }
 
     this.setProperties({
@@ -909,7 +922,6 @@ const Composer = RestModel.extend({
         if (!this.canEditTopicFeaturedLink) {
           this.set("featuredLink", null);
         }
-
         return this.editingPost ? this.editPost(opts) : this.createPost(opts);
       }
     });
@@ -1016,7 +1028,7 @@ const Composer = RestModel.extend({
     return dest;
   },
 
-  createPost(opts) {
+  async createPost(opts) {
     if (CREATE_TOPIC === this.action || PRIVATE_MESSAGE === this.action) {
       this.set("topic", null);
     }
@@ -1025,7 +1037,6 @@ const Composer = RestModel.extend({
     const topic = this.topic;
     const user = this.user;
     const postStream = this.get("topic.postStream");
-    let addedToStream = false;
     const postTypes = this.site.post_types;
     const postType = this.whisper ? postTypes.whisper : postTypes.regular;
 
@@ -1050,6 +1061,7 @@ const Composer = RestModel.extend({
       wiki: false,
       typingTime: this.typingTime,
       composerTime: this.composerTime,
+      metaData: this.metaData,
     });
 
     this.serialize(_create_serializer, createdPost);
@@ -1066,12 +1078,10 @@ const Composer = RestModel.extend({
     // If we're in a topic, we can append the post instantly.
     if (postStream) {
       // If it's in reply to another post, increase the reply count
-      if (post) {
-        post.setProperties({
-          reply_count: (post.reply_count || 0) + 1,
-          replies: [],
-        });
-      }
+      post?.setProperties({
+        reply_count: (post.reply_count || 0) + 1,
+        replies: [],
+      });
 
       // We do not stage posts in mobile view, we do not have the "cooked"
       // Furthermore calculating cooked is very complicated, especially since
@@ -1085,80 +1095,72 @@ const Composer = RestModel.extend({
       }
     }
 
-    const composer = this;
-    composer.setProperties({
+    this.setProperties({
       composeState: SAVING,
       stagedPost: state === "staged" && createdPost,
     });
 
-    return createdPost
-      .save()
-      .then((result) => {
-        let saving = true;
+    try {
+      const result = await createdPost.save();
+      let saving = true;
 
-        if (result.responseJson.action === "enqueued") {
-          if (postStream) {
-            postStream.undoPost(createdPost);
-          }
-          return result;
-        }
-
-        // We sometimes want to hide the `reply_to_user` if the post contains a quote
-        if (
-          result.responseJson &&
-          result.responseJson.post &&
-          !result.responseJson.post.reply_to_user
-        ) {
-          createdPost.set("reply_to_user", null);
-        }
-
-        if (topic) {
-          // It's no longer a new post
-          topic.set("draft_sequence", result.target.draft_sequence);
-          postStream.commitPost(createdPost);
-          addedToStream = true;
-        } else {
-          // We created a new topic, let's show it.
-          composer.set("composeState", CLOSED);
-          saving = false;
-
-          // Update topic_count for the category
-          const category = composer.site.categories.find(
-            (x) => x.id === (parseInt(createdPost.category, 10) || 1)
-          );
-          if (category) {
-            category.incrementProperty("topic_count");
-          }
-        }
-
-        composer.clearState();
-        composer.set("createdPost", createdPost);
-        if (composer.replyingToTopic) {
-          this.appEvents.trigger("post:created", createdPost);
-        } else {
-          this.appEvents.trigger("topic:created", createdPost, composer);
-        }
-
-        if (addedToStream) {
-          composer.set("composeState", CLOSED);
-        } else if (saving) {
-          composer.set("composeState", SAVING);
-        }
-
+      if (result.responseJson.action === "enqueued") {
+        postStream?.undoPost(createdPost);
         return result;
-      })
-      .catch(
-        throwAjaxError(() => {
-          if (postStream) {
-            postStream.undoPost(createdPost);
+      }
 
-            if (post) {
-              post.set("reply_count", post.reply_count - 1);
-            }
-          }
-          next(() => composer.set("composeState", OPEN));
-        })
-      );
+      // We sometimes want to hide the `reply_to_user` if the post contains a quote
+      if (result.responseJson.post && !result.responseJson.post.reply_to_user) {
+        createdPost.set("reply_to_user", null);
+      }
+
+      let addedToStream = false;
+      if (topic) {
+        // It's no longer a new post
+        topic.set("draft_sequence", result.target.draft_sequence);
+        postStream.commitPost(createdPost);
+        addedToStream = true;
+      } else {
+        // We created a new topic, let's show it.
+        this.set("composeState", CLOSED);
+        saving = false;
+
+        // Update topic_count for the category
+        const postCategoryId = parseInt(createdPost.category, 10) || 1;
+        const category = this.site.categories.find(
+          (x) => x.id === postCategoryId
+        );
+
+        category?.incrementProperty("topic_count");
+      }
+
+      this.clearState();
+      this.set("createdPost", createdPost);
+
+      if (this.replyingToTopic) {
+        this.appEvents.trigger("post:created", createdPost);
+      } else {
+        this.appEvents.trigger("topic:created", createdPost, this);
+      }
+
+      if (addedToStream) {
+        this.set("composeState", CLOSED);
+      } else if (saving) {
+        this.set("composeState", SAVING);
+      }
+
+      return result;
+    } catch (error) {
+      if (postStream) {
+        postStream.undoPost(createdPost);
+
+        post?.set("reply_count", post.reply_count - 1);
+      }
+
+      next(() => this.set("composeState", OPEN));
+
+      throw extractError(error);
+    }
   },
 
   getCookedHtml() {
@@ -1209,11 +1211,6 @@ const Composer = RestModel.extend({
     } else {
       // Do not save when there is no reply
       if (isEmpty(this.reply)) {
-        return false;
-      }
-
-      // Do not save when the reply's length is too small
-      if (this.replyLength < this.minimumPostLength) {
         return false;
       }
     }
@@ -1281,28 +1278,23 @@ const Composer = RestModel.extend({
         ) {
           const json = e.jqXHR.responseJSON;
           draftStatus = json.errors[0];
-          if (json.extras && json.extras.description) {
-            const buttons = [];
 
-            // ignore and force save draft
-            buttons.push({
-              label: I18n.t("composer.ignore"),
-              class: "btn",
-              callback: () => {
-                this.set("draftForceSave", true);
-              },
+          if (json.extras?.description) {
+            this.dialog.alert({
+              message: json.extras.description,
+              buttons: [
+                {
+                  label: I18n.t("composer.reload"),
+                  class: "btn-primary",
+                  action: () => window.location.reload(),
+                },
+                {
+                  label: I18n.t("composer.ignore"),
+                  class: "btn",
+                  action: () => this.set("draftForceSave", true),
+                },
+              ],
             });
-
-            // reload
-            buttons.push({
-              label: I18n.t("composer.reload"),
-              class: "btn btn-primary",
-              callback: () => {
-                window.location.reload();
-              },
-            });
-
-            bootbox.dialog(json.extras.description, buttons);
           }
         }
         this.setProperties({

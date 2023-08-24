@@ -74,6 +74,10 @@
             "null"
           ]
         },
+        "form_template_ids": {
+          "type": "array",
+          "items": {}
+        },
         "has_children": {
           "type": [
             "string",
@@ -123,23 +127,22 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-          },
-          "required": [
-
-          ]
+          }
         },
         "allowed_tags": {
-          "type": "array"
+          "type": "array",
+          "items": {}
         },
         "allowed_tag_groups": {
-          "type": "array"
+          "type": "array",
+          "items": {}
         },
         "allow_global_tags": {
           "type": "boolean"
         },
         "required_tag_groups": {
           "type": "array",
-          "items": [
+          "items":
             {
               "type": "object",
               "additionalProperties": false,
@@ -156,7 +159,12 @@
                 "min_count"
               ]
             }
-          ]
+        },
+        "category_setting": {
+          "auto_bump_cooldown_days": 1,
+          "num_auto_bump_daily": null,
+          "require_reply_approval": null,
+          "require_topic_approval": null
         },
         "read_only_banner": {
           "type": [
@@ -166,9 +174,9 @@
         },
         "available_groups": {
           "type": "array",
-          "items": [
+          "items": {
 
-          ]
+          }
         },
         "auto_close_hours": {
           "type": [
@@ -190,7 +198,7 @@
         },
         "group_permissions": {
           "type": "array",
-          "items": [
+          "items":
             {
               "type": "object",
               "additionalProperties": false,
@@ -207,7 +215,6 @@
                 "group_name"
               ]
             }
-          ]
         },
         "email_in": {
           "type": [
@@ -237,6 +244,12 @@
           "type": "integer"
         },
         "uploaded_logo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uploaded_logo_dark": {
           "type": [
             "string",
             "null"
@@ -296,6 +309,7 @@
         "topic_featured_link_allowed",
         "search_priority",
         "uploaded_logo",
+        "uploaded_logo_dark",
         "uploaded_background"
       ]
     }

@@ -5,10 +5,6 @@
   }
 
   .modal-footer {
-    margin: 0;
-    border-top: 0;
-    padding: 10px 0;
-
     .delete-status {
       margin-left: auto;
       margin-right: 0;
@@ -23,16 +19,20 @@
       width: 100%;
     }
 
-    .ember-text-field.user-status-description {
-      min-width: 220px;
-      width: 100%;
-      margin-bottom: 0.5em;
+    .control-group-remove-status {
+      margin-top: 25px;
     }
 
-    .user-status-description-wrap {
-      display: inline-flex;
-      width: 100%;
-      align-items: end;
+    .pause-notifications {
+      margin-top: 1.5em;
+    }
+
+    .control-label {
+      font-weight: 700;
+    }
+
+    .tap-tile:last-child {
+      border: 0;
     }
   }
 }

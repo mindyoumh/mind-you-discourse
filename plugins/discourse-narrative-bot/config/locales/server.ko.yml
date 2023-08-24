@@ -45,8 +45,6 @@ ko:
       trigger: "굴리기"
       invalid: |-
         미안, 수학적으로 그 조합의 주사위는 돌릴 수 없어. :confounded:
-      not_enough_dice:
-        other: "난 주사위가 %{count}개 뿐입니다. [Shameful](https://www.toplessrobot.com/2009/04/the_10_most_shameful_rpg_dice.php), 나도 알아요!"
       out_of_range: |-
         수학적으로 공평하면서도 [가장 큰 수](https://www.wired.com/2016/05/mathematical-challenge-of-designing-the-worlds-most-complex-120-sided-dice)를 가진 주사위의 면 수가 120이라는 거 아니?
       results: |-
@@ -346,12 +344,6 @@ ko:
         reply: |-
           휴, 그것은 가까운 사람이었다! : wink : 게시물을 삭제 취소 할 수있는 시간은 %{deletion_after}입니다.
       category_hashtag:
-        instructions: |-
-          포스트에 카테고리나 태그를 언급할 수 있다는 거 알고 있어? 예를 들어, %{category} 카테고리가 보이니?
-
-          문장 중간에 `#`을 넣고 어떤 카테고리나 태그든 선택해봐.
-        not_found: |-
-          흠, 나는 어디에도 카테고리가 보이지 않습니다. `#`는 첫 번째 문자가 될 수 없습니다. 다음 답장에서이 내용을 복사 할 수 있습니까? ```텍스트 # #``을 통해 카테고리 링크를 만들 수 있습니다
         reply: |-
           우수한! 태그가 활성화 된 경우 두 카테고리 _and_ 태그 모두에서 작동합니다.
       change_topic_notification_level:

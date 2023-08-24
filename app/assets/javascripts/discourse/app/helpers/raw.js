@@ -2,21 +2,23 @@ import { helperContext, registerUnbound } from "discourse-common/lib/helpers";
 import { findRawTemplate } from "discourse-common/lib/raw-templates";
 import { htmlSafe } from "@ember/template";
 import { RUNTIME_OPTIONS } from "discourse-common/lib/raw-handlebars-helpers";
+import { getOwner, setOwner } from "@ember/application";
 
 function renderRaw(ctx, template, templateName, params) {
-  params = Object.assign({}, params);
-  params.parent = params.parent || ctx;
+  params = { ...params };
+  params.parent ||= ctx;
 
   let context = helperContext();
   if (!params.view) {
     const viewClass = context.registry.resolve(`raw-view:${templateName}`);
 
     if (viewClass) {
+      setOwner(params, getOwner(context));
       params.view = viewClass.create(params, context);
     }
 
     if (!params.view) {
-      params = Object.assign({}, params, context);
+      params = { ...params, ...context };
     }
   }
 

@@ -38,9 +38,11 @@
 !/plugins/discourse-local-dates
 !/plugins/discourse-narrative-bot
 !/plugins/discourse-presence
-!/plugins/lazy-yt/
+!/plugins/discourse-lazy-videos/
+!/plugins/chat/
 !/plugins/poll/
 !/plugins/styleguide
+!/plugins/checklist/
 /plugins/*/auto_generated/
 
 /spec/fixtures/plugins/my_plugin/auto_generated
@@ -49,10 +51,21 @@
 /vendor/data/GeoLite2-City.mmdb
 /vendor/data/GeoLite2-ASN.mmdb
 
+# We provide a .sample but people can use newer versions if they want to
+.ruby-version
+.ruby-gemset
+
+# Likewise, there is a .vscode-sample for VSCode config
+.vscode
+
 # Front-end
 dist
 node_modules
 yarn-error.log
+
+# Linting artifacts
+.eslintcache
+/lint-progress/
 
 # Auto-generated plugin JS assets
 /app/assets/javascripts/plugins/*

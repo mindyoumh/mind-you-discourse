@@ -61,7 +61,7 @@ export default {
         {
           id: 3,
           name: "meta",
-          color: "aaa",
+          color: "aaaaaa",
           text_color: "FFFFFF",
           slug: "meta",
           topic_count: 122,
@@ -186,7 +186,7 @@ export default {
           description:
             'This is a special, temporary category to organize work on the <a href="http://www.meetup.com/torontoruby/events/192168702/">Discourse Hack Night</a> in Toronto. ',
           description_text:
-            'This is a special, temporary category to organize work on the Discourse Hack Night in Toronto.',
+            "This is a special, temporary category to organize work on the Discourse Hack Night in Toronto.",
           topic_url: "/t/about-the-hack-night-category/17878",
           read_restricted: false,
           permission: 1,
@@ -398,7 +398,7 @@ export default {
           description:
             'Support for the official Discourse WordPress plugin at <a href="https://github.com/discourse/wp-discourse">https://github.com/discourse/wp-discourse</a>',
           description_text:
-            'Support for the official Discourse WordPress plugin at https://github.com/discourse/wp-discourse',
+            "Support for the official Discourse WordPress plugin at https://github.com/discourse/wp-discourse",
           topic_url: "/t/category-definition-for-wordpress/12282",
           read_restricted: false,
           permission: 1,
@@ -551,7 +551,6 @@ export default {
           notification_level: null,
           background_url: null,
         },
-
       ],
       post_action_types: [
         {
@@ -696,6 +695,92 @@ export default {
           frame_height: 400,
           can_connect: true,
           can_revoke: true,
+        },
+      ],
+      displayed_about_plugin_stat_groups: ["chat_messages"],
+      hashtag_configurations: { "topic-composer": ["category", "tag"] },
+      hashtag_icons: { "category": "folder", "tag": "tag" },
+      anonymous_sidebar_sections: [
+        {
+          id: 111,
+          title: "Community",
+          links: [
+            {
+              id: 329,
+              name: "Topics",
+              value: "/latest",
+              icon: "layer-group",
+              external: false,
+              segment: "primary",
+            },
+            {
+              id: 330,
+              name: "Users",
+              value: "/u",
+              icon: "users",
+              external: false,
+              segment: "secondary",
+            },
+            {
+              id: 331,
+              name: "About",
+              value: "/about",
+              icon: "info-circle",
+              external: false,
+              segment: "secondary",
+            },
+            {
+              id: 332,
+              name: "Faq",
+              value: "/faq",
+              icon: "question-circle",
+              external: false,
+              segment: "secondary",
+            },
+            {
+              id: 333,
+              name: "My Posts",
+              value: "/my/activity",
+              icon: "user",
+              external: false,
+              segment: "primary",
+            },
+            {
+              id: 334,
+              name: "Review",
+              value: "/review",
+              icon: "flag",
+              external: false,
+              segment: "secondary",
+            },
+            {
+              id: 335,
+              name: "Admin",
+              value: "/admin",
+              icon: "wrench",
+              external: false,
+              segment: "primary",
+            },
+            {
+              id: 336,
+              name: "Groups",
+              value: "/g",
+              icon: "user-friends",
+              external: false,
+              segment: "secondary",
+            },
+            {
+              id: 337,
+              name: "Badges",
+              value: "/badges",
+              icon: "certificate",
+              external: false,
+              segment: "secondary",
+            },
+          ],
+          slug: "community",
+          public: true,
+          section_type: "community",
         },
       ],
     },

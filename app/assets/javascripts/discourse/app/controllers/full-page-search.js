@@ -1,5 +1,8 @@
 import Controller, { inject as controller } from "@ember/controller";
-import discourseComputed, { observes } from "discourse-common/utils/decorators";
+import discourseComputed, {
+  bind,
+  observes,
+} from "discourse-common/utils/decorators";
 import {
   getSearchKey,
   isValidSearchTerm,
@@ -14,13 +17,15 @@ import I18n from "I18n";
 import { ajax } from "discourse/lib/ajax";
 import { escapeExpression } from "discourse/lib/utilities";
 import { isEmpty } from "@ember/utils";
+import { action } from "@ember/object";
 import { gt, or } from "@ember/object/computed";
 import { scrollTop } from "discourse/mixins/scroll-top";
 import { setTransient } from "discourse/lib/page-tracker";
 import { Promise } from "rsvp";
 import { search as searchCategoryTag } from "discourse/lib/category-tag-search";
-import showModal from "discourse/lib/show-modal";
 import userSearch from "discourse/lib/user-search";
+import { inject as service } from "@ember/service";
+import TopicBulkActions from "discourse/components/modal/topic-bulk-actions";
 
 const SortOrders = [
   { name: I18n.t("search.relevance"), id: 0 },
@@ -36,11 +41,22 @@ export const SEARCH_TYPE_USERS = "users";
 
 const PAGE_LIMIT = 10;
 
+const customSearchTypes = [];
+
+export function registerFullPageSearchType(
+  translationKey,
+  searchTypeId,
+  searchFunc
+) {
+  customSearchTypes.push({ translationKey, searchTypeId, searchFunc });
+}
+
 export default Controller.extend({
   application: controller(),
-  composer: controller(),
-  bulkSelectEnabled: null,
+  composer: service(),
+  modal: service(),
 
+  bulkSelectEnabled: null,
   loading: false,
   queryParams: [
     "q",
@@ -61,11 +77,13 @@ export default Controller.extend({
   page: 1,
   resultCount: null,
   searchTypes: null,
+  selected: [],
+  error: null,
 
   init() {
     this._super(...arguments);
 
-    this.set("searchTypes", [
+    const searchTypes = [
       { name: I18n.t("search.type.default"), id: SEARCH_TYPE_DEFAULT },
       {
         name: this.siteSettings.tagging_enabled
@@ -74,8 +92,16 @@ export default Controller.extend({
         id: SEARCH_TYPE_CATS_TAGS,
       },
       { name: I18n.t("search.type.users"), id: SEARCH_TYPE_USERS },
-    ]);
-    this.selected = [];
+    ];
+
+    customSearchTypes.forEach((type) => {
+      searchTypes.push({
+        name: I18n.t(type.translationKey),
+        id: type.searchTypeId,
+      });
+    });
+
+    this.set("searchTypes", searchTypes);
   },
 
   @discourseComputed("resultCount")
@@ -110,7 +136,7 @@ export default Controller.extend({
       return (!skip && context) || skip === "false";
     },
     set(val) {
-      this.set("skip_context", val ? "false" : "true");
+      this.set("skip_context", !val);
     },
   },
 
@@ -194,7 +220,7 @@ export default Controller.extend({
 
   @discourseComputed("q")
   showLikeCount(q) {
-    return q && q.indexOf("order:likes") > -1;
+    return q?.includes("order:likes");
   },
 
   @observes("q")
@@ -211,17 +237,12 @@ export default Controller.extend({
     return (
       q &&
       this.currentUser &&
-      (q.indexOf("in:messages") > -1 ||
-        q.indexOf("in:personal") > -1 ||
-        q.indexOf(
+      (q.includes("in:messages") ||
+        q.includes("in:personal") ||
+        q.includes(
           `personal_messages:${this.currentUser.get("username_lower")}`
-        ) > -1)
+        ))
     );
-  },
-
-  @observes("loading")
-  _showFooter() {
-    this.set("application.showFooter", !this.loading);
   },
 
   @discourseComputed("resultCount", "noSortQ")
@@ -272,6 +293,13 @@ export default Controller.extend({
     return searchType === SEARCH_TYPE_DEFAULT;
   },
 
+  @discourseComputed("search_type")
+  customSearchType(searchType) {
+    return customSearchTypes.find(
+      (type) => searchType === type["searchTypeId"]
+    );
+  },
+
   @discourseComputed("bulkSelectEnabled")
   searchInfoClassNames(bulkSelectEnabled) {
     return bulkSelectEnabled
@@ -281,6 +309,7 @@ export default Controller.extend({
 
   searchButtonDisabled: or("searching", "loading"),
 
+  @bind
   _search() {
     if (this.searching) {
       return;
@@ -297,6 +326,7 @@ export default Controller.extend({
 
     if (args.page === 1) {
       this.set("bulkSelectEnabled", false);
+
       this.selected.clear();
       this.set("searching", true);
       scrollTop();
@@ -320,6 +350,12 @@ export default Controller.extend({
     }
 
     const searchKey = getSearchKey(args);
+
+    if (this.customSearchType) {
+      const customSearch = this.customSearchType["searchFunc"];
+      customSearch(this, args, searchKey);
+      return;
+    }
 
     switch (this.search_type) {
       case SEARCH_TYPE_CATS_TAGS:
@@ -380,6 +416,10 @@ export default Controller.extend({
               model.grouped_search_result = results.grouped_search_result;
               this.set("model", model);
             }
+            this.set("error", null);
+          })
+          .catch((e) => {
+            this.set("error", e.jqXHR.responseJSON?.message);
           })
           .finally(() => {
             this.setProperties({
@@ -391,22 +431,39 @@ export default Controller.extend({
     }
   },
 
-  actions: {
-    createTopic(searchTerm) {
-      let topicCategory;
-      if (searchTerm.indexOf("category:") !== -1) {
-        const match = searchTerm.match(/category:(\S*)/);
-        if (match && match[1]) {
-          topicCategory = match[1];
-        }
-      }
-      this.composer.open({
-        action: Composer.CREATE_TOPIC,
-        draftKey: Composer.NEW_TOPIC_KEY,
-        topicCategory,
-      });
-    },
+  _afterTransition() {
+    if (Object.keys(this.model).length === 0) {
+      this.reset();
+    }
+  },
 
+  reset() {
+    this.setProperties({
+      searching: false,
+      page: 1,
+      resultCount: null,
+      selected: [],
+    });
+  },
+
+  @action
+  createTopic(searchTerm, event) {
+    event?.preventDefault();
+    let topicCategory;
+    if (searchTerm.includes("category:")) {
+      const match = searchTerm.match(/category:(\S*)/);
+      if (match && match[1]) {
+        topicCategory = match[1];
+      }
+    }
+    this.composer.open({
+      action: Composer.CREATE_TOPIC,
+      draftKey: Composer.NEW_TOPIC_KEY,
+      topicCategory,
+    });
+  },
+
+  actions: {
     selectAll() {
       this.selected.addObjects(this.get("model.posts").mapBy("topic"));
 
@@ -438,14 +495,12 @@ export default Controller.extend({
     },
 
     showBulkActions() {
-      const modalController = showModal("topic-bulk-actions", {
+      this.modal.show(TopicBulkActions, {
         model: {
           topics: this.selected,
+          refreshClosure: this._search,
         },
-        title: "topics.bulk.actions",
       });
-
-      modalController.set("refreshClosure", () => this._search());
     },
 
     search(options = {}) {

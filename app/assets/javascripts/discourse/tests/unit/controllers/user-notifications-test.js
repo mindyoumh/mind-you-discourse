@@ -1,23 +1,21 @@
-import { discourseModule } from "discourse/tests/helpers/qunit-helpers";
-import { test } from "qunit";
-import * as showModal from "discourse/lib/show-modal";
+import { module, test } from "qunit";
+import { setupTest } from "ember-qunit";
 import sinon from "sinon";
+import pretender, { response } from "discourse/tests/helpers/create-pretender";
 import EmberObject from "@ember/object";
 import User from "discourse/models/user";
-import pretender from "discourse/tests/helpers/create-pretender";
 
-discourseModule("Unit | Controller | user-notifications", function () {
+module("Unit | Controller | user-notifications", function (hooks) {
+  setupTest(hooks);
+
   test("Mark read marks all models read when response is 200", async function (assert) {
     const model = [
       EmberObject.create({ read: false }),
       EmberObject.create({ read: false }),
     ];
-    const controller = this.getController("user-notifications", {
-      model,
-    });
-    pretender.put("/notifications/mark-read", () => {
-      return [200];
-    });
+    const controller = this.owner.lookup("controller:user-notifications");
+    controller.setProperties({ model });
+    pretender.put("/notifications/mark-read", () => response({}));
 
     await controller.markRead();
 
@@ -32,10 +30,9 @@ discourseModule("Unit | Controller | user-notifications", function () {
       EmberObject.create({ read: false }),
       EmberObject.create({ read: true }),
     ];
-    const controller = this.getController("user-notifications", { model });
-    pretender.put("/notifications/mark-read", () => {
-      return [500];
-    });
+    const controller = this.owner.lookup("controller:user-notifications");
+    controller.setProperties({ model });
+    pretender.put("/notifications/mark-read", () => response(500));
 
     assert.rejects(controller.markRead());
     assert.deepEqual(
@@ -48,38 +45,15 @@ discourseModule("Unit | Controller | user-notifications", function () {
   test("Marks all notifications read when no high priority notifications", function (assert) {
     let markRead = false;
     const currentUser = User.create({ unread_high_priority_notifications: 0 });
-    const controller = this.getController("user-notifications", {
+    const controller = this.owner.lookup("controller:user-notifications");
+    controller.setProperties({
       model: [],
       currentUser,
     });
-    sinon.stub(controller, "markRead").callsFake(() => {
-      markRead = true;
-    });
+    sinon.stub(controller, "markRead").callsFake(() => (markRead = true));
 
     controller.send("resetNew");
 
     assert.strictEqual(markRead, true);
-  });
-
-  test("Shows modal when has high priority notifications", function (assert) {
-    let capturedProperties;
-    sinon
-      .stub(showModal, "default")
-      .withArgs("dismiss-notification-confirmation")
-      .returns({
-        setProperties: (properties) => (capturedProperties = properties),
-      });
-    const currentUser = User.create({ unread_high_priority_notifications: 1 });
-    const controller = this.getController("user-notifications", {
-      currentUser,
-    });
-    const markReadFake = sinon.fake();
-    sinon.stub(controller, "markRead").callsFake(markReadFake);
-
-    controller.send("resetNew");
-
-    assert.strictEqual(capturedProperties.count, 1);
-    capturedProperties.dismissNotifications();
-    assert.strictEqual(markReadFake.callCount, 1);
   });
 });

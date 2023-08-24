@@ -2,12 +2,10 @@ import SelectKitComponent from "select-kit/components/select-kit";
 import { computed } from "@ember/object";
 import { isPresent } from "@ember/utils";
 import { next } from "@ember/runloop";
-import layout from "select-kit/templates/components/multi-select";
 import { makeArray } from "discourse-common/lib/helpers";
 
 export default SelectKitComponent.extend({
   pluginApiIdentifiers: ["multi-select"],
-  layout,
   classNames: ["multi-select"],
   multiSelect: true,
 
@@ -19,9 +17,11 @@ export default SelectKitComponent.extend({
     closeOnChange: false,
     autoInsertNoneItem: false,
     headerComponent: "multi-select/multi-select-header",
+    filterComponent: "multi-select/multi-select-filter",
     autoFilterable: true,
     caretDownIcon: "caretIcon",
     caretUpIcon: "caretIcon",
+    useHeaderFilter: false,
   },
 
   caretIcon: computed("value.[]", function () {
@@ -155,7 +155,7 @@ export default SelectKitComponent.extend({
         return this.selectKit.modifySelection(content);
       }
 
-      return this.selectKit.noneItem;
+      return null;
     }
   ),
 

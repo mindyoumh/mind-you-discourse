@@ -2,6 +2,7 @@ import User from "discourse/models/user";
 import { escapeExpression } from "discourse/lib/utilities";
 import getURL from "discourse-common/lib/get-url";
 import { helperContext } from "discourse-common/lib/helpers";
+import { escape } from "pretty-text/sanitizer";
 
 let _renderer = defaultRenderTag;
 
@@ -38,17 +39,21 @@ export function defaultRenderTag(tag, params) {
     classes.push(params.size);
   }
 
+  // remove all html tags from hover text
+  const hoverDescription =
+    params.description && params.description.replace(/<.+?>/g, "");
+
   let val =
     "<" +
     tagName +
     href +
     " data-tag-name=" +
     tag +
-    (params.description ? ' title="' + params.description + '" ' : "") +
+    (params.description ? ' title="' + escape(hoverDescription) + '" ' : "") +
     " class='" +
     classes.join(" ") +
     "'>" +
-    visibleName +
+    (params.displayName ? escape(params.displayName) : visibleName) +
     "</" +
     tagName +
     ">";

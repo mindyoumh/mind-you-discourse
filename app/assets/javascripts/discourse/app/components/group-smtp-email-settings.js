@@ -17,12 +17,9 @@ export default Component.extend({
     "form.smtp_port"
   )
   missingSettings(email_username, email_password, smtp_server, smtp_port) {
-    return [
-      email_username,
-      email_password,
-      smtp_server,
-      smtp_port,
-    ].some((value) => isEmpty(value));
+    return [email_username, email_password, smtp_server, smtp_port].some(
+      (value) => isEmpty(value)
+    );
   },
 
   @action
@@ -46,7 +43,8 @@ export default Component.extend({
   },
 
   @action
-  prefillSettings(provider) {
+  prefillSettings(provider, event) {
+    event?.preventDefault();
     this.form.setProperties(emailProviderDefaultSettings(provider, "smtp"));
   },
 

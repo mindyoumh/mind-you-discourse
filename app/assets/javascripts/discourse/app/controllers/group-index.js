@@ -1,14 +1,14 @@
-import Controller, { inject as controller } from "@ember/controller";
-import discourseComputed, { observes } from "discourse-common/utils/decorators";
+import Controller from "@ember/controller";
+import discourseComputed, {
+  debounce,
+  observes,
+} from "discourse-common/utils/decorators";
 import { action } from "@ember/object";
 import { ajax } from "discourse/lib/ajax";
-import discourseDebounce from "discourse-common/lib/debounce";
 import { gt } from "@ember/object/computed";
 import { popupAjaxError } from "discourse/lib/ajax-error";
 
 export default Controller.extend({
-  application: controller(),
-
   queryParams: ["order", "asc", "filter"],
 
   order: "",
@@ -22,15 +22,18 @@ export default Controller.extend({
 
   bulkSelection: null,
 
+  get canLoadMore() {
+    return this.get("model.members")?.length < this.get("model.user_count");
+  },
+
   @observes("filterInput")
+  filterInputChanged() {
+    this._setFilter();
+  },
+
+  @debounce(500)
   _setFilter() {
-    discourseDebounce(
-      this,
-      function () {
-        this.set("filter", this.filterInput);
-      },
-      500
-    );
+    this.set("filter", this.filterInput);
   },
 
   @observes("order", "asc", "filter")
@@ -43,18 +46,13 @@ export default Controller.extend({
       return;
     }
 
-    if (!refresh && this.model.members.length >= this.model.user_count) {
-      this.set("application.showFooter", true);
+    if (!refresh && !this.canLoadMore) {
       return;
     }
 
     this.set("loading", true);
     this.model.reloadMembers(this.memberParams, refresh).finally(() => {
-      this.setProperties({
-        "application.showFooter":
-          this.model.members.length >= this.model.user_count,
-        loading: false,
-      });
+      this.set("loading", false);
 
       if (this.refresh) {
         this.set("bulkSelection", []);
@@ -137,17 +135,17 @@ export default Controller.extend({
       case "removeMembers":
         return ajax(`/groups/${this.model.id}/members.json`, {
           type: "DELETE",
-          data: { user_ids: selection.map((u) => u.id).join(",") },
+          data: { user_ids: selection.mapBy("id").join(",") },
         }).then(() => {
           this.model.reloadMembers(this.memberParams, true);
           this.set("isBulk", false);
         });
 
       case "makeOwners":
-        return ajax(`/admin/groups/${this.model.id}/owners.json`, {
+        return ajax(`/groups/${this.model.id}/owners.json`, {
           type: "PUT",
           data: {
-            group: { usernames: selection.map((u) => u.username).join(",") },
+            usernames: selection.mapBy("username").join(","),
           },
         }).then(() => {
           selection.forEach((s) => s.set("owner", true));
@@ -219,7 +217,9 @@ export default Controller.extend({
     document
       .querySelectorAll("input.bulk-select:not(:checked)")
       .forEach((checkbox) => {
-        checkbox.checked = true;
+        if (!checkbox.checked) {
+          checkbox.click();
+        }
       });
   },
 
@@ -228,7 +228,9 @@ export default Controller.extend({
     document
       .querySelectorAll("input.bulk-select:checked")
       .forEach((checkbox) => {
-        checkbox.checked = false;
+        if (checkbox.checked) {
+          checkbox.click();
+        }
       });
   },
 

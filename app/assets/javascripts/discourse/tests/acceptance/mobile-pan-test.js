@@ -7,14 +7,9 @@ import {
 import { click, triggerEvent, visit } from "@ember/test-helpers";
 
 async function triggerSwipeStart(touchTarget) {
-  // some tests are shown in a zoom viewport.
-  // boundingClientRect is affected by the zoom and need to be multiplied by the zoom effect.
-  // EG: if the element has a zoom of 50%, this DOUBLES the x and y positions and offsets.
-  // The numbers you get from getBoundingClientRect are seen as twice as large... however, the
-  // touch input still deals with the base inputs, not doubled. This allows us to convert for those environments.
-  let zoom = parseFloat(
-    window.getComputedStyle(document.querySelector("#ember-testing")).zoom || 1
-  );
+  const emberTesting = document.querySelector("#ember-testing-container");
+  emberTesting.scrollTop = 0;
+  emberTesting.scrollLeft = 0;
 
   // Other tests are shown in a transformed viewport, and this is a multiple for the offsets
   let scale = parseFloat(
@@ -26,13 +21,11 @@ async function triggerSwipeStart(touchTarget) {
   const touchStart = {
     touchTarget,
     x:
-      zoom *
-      (touchTarget.getBoundingClientRect().x +
-        (scale * touchTarget.offsetWidth) / 2),
+      touchTarget.getBoundingClientRect().x +
+      (scale * touchTarget.offsetWidth) / 2,
     y:
-      zoom *
-      (touchTarget.getBoundingClientRect().y +
-        (scale * touchTarget.offsetHeight) / 2),
+      touchTarget.getBoundingClientRect().y +
+      (scale * touchTarget.offsetHeight) / 2,
   };
   const touch = new Touch({
     identifier: "test",

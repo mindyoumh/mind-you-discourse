@@ -10,8 +10,12 @@ concurrency:
   group: licenses-${{ format('{0}-{1}', github.head_ref || github.run_number, github.job) }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    if: github.event_name == 'pull_request' || github.repository != 'discourse/discourse-private-mirror'
     name: run
     runs-on: ubuntu-latest
     container: discourse/discourse_test:slim
@@ -32,8 +36,7 @@ jobs:
         with:
           path: vendor/bundle
           key: ${{ runner.os }}-gem-${{ hashFiles('**/Gemfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-gem-
+          restore-keys: ${{ runner.os }}-gem-
 
       - name: Setup gems
         run: |
@@ -49,7 +52,7 @@ jobs:
 
       - name: Get yarn cache directory
         id: yarn-cache-dir
-        run: echo "::set-output name=dir::$(yarn cache dir)"
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
 
       - name: Yarn cache
         uses: actions/cache@v3
@@ -57,11 +60,10 @@ jobs:
         with:
           path: ${{ steps.yarn-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          restore-keys: ${{ runner.os }}-yarn-
 
       - name: Check RubyGems Licenses
-        if: ${{ always() }}
+        if: ${{ !cancelled() }}
         run: |
           licensed cache
           licensed status
@@ -70,14 +72,14 @@ jobs:
         run: yarn install
 
       - name: Check Yarn Licenses
-        if: ${{ always() }}
+        if: ${{ !cancelled() }}
         run: |
           yarn global add licensee
           yarn global upgrade licensee
           licensee --errors-only
 
       - name: Check Ember CLI Workspace Licenses
-        if: ${{ always() }}
+        if: ${{ !cancelled() }}
         working-directory: ./app/assets/javascripts
         run: |
           licensee --errors-only
